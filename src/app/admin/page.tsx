@@ -53,7 +53,14 @@ export default async function AdminPage() {
           </p>
         </div>
 
-        <div className="mt-6 flex gap-3">
+<div className="mt-6 flex flex-wrap gap-3">
+  <a
+    href="/admin/submissions"
+    className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-neutral-950 hover:bg-neutral-200"
+  >
+    View submissions
+  </a>
+
   <a
     href="/admin/import"
     className="rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
