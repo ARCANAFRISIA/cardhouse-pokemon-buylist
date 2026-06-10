@@ -44,6 +44,7 @@ export default function BuyPage() {
   const [items, setItems] = useState<SearchItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [cartLoaded, setCartLoaded] = useState(false);
 
   const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
   const cartTotal = cart.reduce((sum, item) => sum + lineTotal(item), 0);
@@ -53,6 +54,28 @@ export default function BuyPage() {
     if (items.length === 0) return "No buylist cards found";
     return `${items.length} buylist card${items.length === 1 ? "" : "s"} found`;
   }, [loading, items.length]);
+
+  useEffect(() => {
+  try {
+    const raw = window.localStorage.getItem("cardhouse-buylist-cart");
+    if (raw) {
+      const parsed = JSON.parse(raw) as CartItem[];
+      if (Array.isArray(parsed)) {
+        setCart(parsed);
+      }
+    }
+  } catch (error) {
+    console.error("Failed to load cart", error);
+  } finally {
+    setCartLoaded(true);
+  }
+}, []);
+
+useEffect(() => {
+  if (!cartLoaded) return;
+
+  window.localStorage.setItem("cardhouse-buylist-cart", JSON.stringify(cart));
+}, [cart, cartLoaded]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -368,13 +391,21 @@ const res = await fetch(`/api/cards/search?${params.toString()}`, {
                 </div>
               )}
 
-              <button
-                type="button"
-                disabled={cart.length === 0}
-                className="mt-5 w-full rounded-2xl bg-red-600 px-5 py-4 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Continue with buylist
-              </button>
+<Link
+  href="/submit"
+  aria-disabled={cart.length === 0}
+  onClick={(e) => {
+    if (cart.length === 0) e.preventDefault();
+  }}
+  className={[
+    "mt-5 block w-full rounded-2xl px-5 py-4 text-center font-bold text-white",
+    cart.length === 0
+      ? "cursor-not-allowed bg-red-600 opacity-40"
+      : "bg-red-600 hover:bg-red-700",
+  ].join(" ")}
+>
+  Continue with buylist
+</Link>
 
               <p className="mt-4 text-xs leading-5 text-neutral-500">
                 Final payout is confirmed after checking version, language,
