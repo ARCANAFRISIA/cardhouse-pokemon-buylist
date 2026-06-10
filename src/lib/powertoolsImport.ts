@@ -20,14 +20,27 @@ function parseIntLoose(value: unknown): number | null {
 }
 
 function parseEuroToCents(value: unknown): number | null {
-  const raw = normalizeText(value)
-    .replace(/[€\s]/g, "")
-    .replace(/\./g, "")
-    .replace(",", ".");
+  let raw = normalizeText(value).replace(/[€\s]/g, "");
 
   if (!raw) return null;
 
+  const hasComma = raw.includes(",");
+  const hasDot = raw.includes(".");
+
+  if (hasComma && hasDot) {
+    // Europese notatie: 1.234,56
+    raw = raw.replace(/\./g, "").replace(",", ".");
+  } else if (hasComma) {
+    // Europese decimalen: 1,95
+    raw = raw.replace(",", ".");
+  } else if (hasDot) {
+    // PowerTools gebruikt punt als decimaal: 1.95
+    // Dus punt laten staan.
+    raw = raw;
+  }
+
   const n = Number(raw);
+
   if (!Number.isFinite(n) || n <= 0) return null;
 
   return Math.round(n * 100);
