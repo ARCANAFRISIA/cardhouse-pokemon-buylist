@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+
+import SubmissionItemsEditor from "@/components/admin/SubmissionItemsEditor";
 import SubmissionStatusEditor from "@/components/admin/SubmissionStatusEditor";
+import { getBuylistSettings } from "@/lib/buylistSettings";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -10,6 +13,35 @@ type PageProps = {
   params: Promise<{
     id: string;
   }>;
+};
+
+type ItemChange = {
+  itemId: string;
+  cardName: string | null;
+  before: {
+    qty: number;
+    unitCents: number;
+    lineCents: number;
+    itemStatus: string;
+    receivedCondition: string | null;
+  };
+  after: {
+    qty: number;
+    unitCents: number;
+    lineCents: number;
+    itemStatus: string;
+    receivedCondition: string | null;
+  };
+  note?: string | null;
+};
+
+type StatusEvent = {
+  ts?: string;
+  type?: string;
+  from?: string | null;
+  to?: string;
+  message?: string | null;
+  changes?: ItemChange[];
 };
 
 function euro(cents: number | null | undefined) {
@@ -21,17 +53,18 @@ function euro(cents: number | null | undefined) {
   })}`;
 }
 
+function centsToDisplay(cents: number | null | undefined) {
+  if (cents == null) return "—";
+
+  return (cents / 100).toLocaleString("nl-NL", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 function shortRef(id: string) {
   return id.slice(0, 8);
 }
-
-type StatusEvent = {
-  ts?: string;
-  type?: string;
-  from?: string | null;
-  to?: string;
-  message?: string | null;
-};
 
 function parseMetaEvents(metaText: string | null): StatusEvent[] {
   if (!metaText) return [];
@@ -44,26 +77,35 @@ function parseMetaEvents(metaText: string | null): StatusEvent[] {
   }
 }
 
+function historyTitle(event: StatusEvent) {
+  if (event.type === "items") return "Items aangepast";
+  if (event.from) return `${event.from} → ${event.to}`;
+  return event.to ?? "Event";
+}
+
 export default async function AdminSubmissionDetailPage({ params }: PageProps) {
   const { id } = await params;
 
-  const submission = await prisma.submission.findUnique({
-    where: { id },
-    include: {
-      items: {
-        orderBy: {
-          createdAt: "asc",
+  const [submission, settings] = await Promise.all([
+    prisma.submission.findUnique({
+      where: { id },
+      include: {
+        items: {
+          orderBy: {
+            createdAt: "asc",
+          },
         },
       },
-    },
-  });
+    }),
+    getBuylistSettings(),
+  ]);
 
   if (!submission) {
     notFound();
   }
 
   const cardCount = submission.items.reduce((sum, item) => sum + item.qty, 0);
-const events = parseMetaEvents(submission.metaText);
+  const events = parseMetaEvents(submission.metaText);
 
   return (
     <main className="min-h-screen bg-neutral-950 text-white">
@@ -124,6 +166,7 @@ const events = parseMetaEvents(submission.metaText);
                           CM {item.cardmarketId}
                         </div>
                       </td>
+
                       <td className="px-4 py-3 text-neutral-300">
                         {item.setName ?? "—"}
                         {item.setCode ? ` · ${item.setCode}` : ""}
@@ -131,6 +174,7 @@ const events = parseMetaEvents(submission.metaText);
                           ? ` · #${item.collectorNumber}`
                           : ""}
                       </td>
+
                       <td className="px-4 py-3">{item.qty}</td>
                       <td className="px-4 py-3">{euro(item.unitCents)}</td>
                       <td className="px-4 py-3 font-semibold">
@@ -141,7 +185,27 @@ const events = parseMetaEvents(submission.metaText);
                 </tbody>
               </table>
             </div>
-                        {events.length > 0 && (
+
+            <SubmissionItemsEditor
+              submissionId={submission.id}
+              excellentPenaltyPct={settings.excellentPenaltyPct}
+              items={submission.items.map((item) => ({
+                id: item.id,
+                cardName: item.cardName,
+                setName: item.setName,
+                setCode: item.setCode,
+                collectorNumber: item.collectorNumber,
+                rarity: item.rarity,
+                qty: item.qty,
+                unitCents: item.unitCents,
+                lineCents: item.lineCents,
+                itemStatus: item.itemStatus,
+                receivedCondition: item.receivedCondition,
+                adminNote: item.adminNote,
+              }))}
+            />
+
+            {events.length > 0 && (
               <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.04] p-5">
                 <h2 className="text-xl font-bold">History</h2>
 
@@ -155,9 +219,8 @@ const events = parseMetaEvents(submission.metaText);
                         className="rounded-xl border border-white/10 bg-neutral-900 p-4 text-sm"
                       >
                         <div className="flex flex-wrap justify-between gap-3">
-                          <strong>
-                            {event.from ? `${event.from} → ${event.to}` : event.to}
-                          </strong>
+                          <strong>{historyTitle(event)}</strong>
+
                           <span className="text-neutral-400">
                             {event.ts
                               ? new Date(event.ts).toLocaleString("nl-NL")
@@ -170,6 +233,41 @@ const events = parseMetaEvents(submission.metaText);
                             {event.message}
                           </p>
                         )}
+
+                        {Array.isArray(event.changes) &&
+                          event.changes.length > 0 && (
+                            <div className="mt-3 space-y-2">
+                              {event.changes.map((change) => (
+                                <div
+                                  key={change.itemId}
+                                  className="rounded-lg bg-black/20 p-3 text-xs text-neutral-300"
+                                >
+                                  <strong>
+                                    {change.cardName ?? "Unknown card"}
+                                  </strong>
+
+                                  <div className="mt-1">
+                                    {change.before.qty} × €{" "}
+                                    {centsToDisplay(change.before.unitCents)} →{" "}
+                                    {change.after.qty} × €{" "}
+                                    {centsToDisplay(change.after.unitCents)}
+                                  </div>
+
+                                  <div className="mt-1">
+                                    {change.before.itemStatus} →{" "}
+                                    {change.after.itemStatus}
+                                    {change.after.receivedCondition
+                                      ? ` · ${change.after.receivedCondition}`
+                                      : ""}
+                                  </div>
+
+                                  {change.note && (
+                                    <div className="mt-1">{change.note}</div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                       </div>
                     ))}
                 </div>
@@ -177,13 +275,13 @@ const events = parseMetaEvents(submission.metaText);
             )}
           </section>
 
-         <aside className="space-y-5 lg:sticky lg:top-6 lg:self-start">
-  <SubmissionStatusEditor
-    submissionId={submission.id}
-    currentStatus={submission.status}
-  />
+          <aside className="space-y-5 lg:sticky lg:top-6 lg:self-start">
+            <SubmissionStatusEditor
+              submissionId={submission.id}
+              currentStatus={submission.status}
+            />
 
-  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
               <h2 className="text-xl font-bold">Customer</h2>
 
               <div className="mt-5 space-y-3 text-sm">
@@ -191,17 +289,22 @@ const events = parseMetaEvents(submission.metaText);
                   <span className="text-neutral-400">Status</span>
                   <strong>{submission.status}</strong>
                 </div>
+
                 <div className="flex justify-between gap-4">
                   <span className="text-neutral-400">Total</span>
                   <strong>{euro(submission.serverTotalCents)}</strong>
                 </div>
+
                 <div className="flex justify-between gap-4">
                   <span className="text-neutral-400">Cards</span>
                   <strong>{cardCount}</strong>
                 </div>
+
                 <div className="flex justify-between gap-4">
                   <span className="text-neutral-400">Created</span>
-                  <strong>{submission.createdAt.toLocaleString("nl-NL")}</strong>
+                  <strong>
+                    {submission.createdAt.toLocaleString("nl-NL")}
+                  </strong>
                 </div>
               </div>
 

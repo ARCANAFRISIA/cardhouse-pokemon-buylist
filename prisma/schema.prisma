@@ -124,6 +124,12 @@ model SubmissionItem {
   lineCents        Int
   priceSource      String?
 
+  itemStatus        String   @default("PENDING") // PENDING / ACCEPTED / ADJUSTED / REJECTED
+receivedCondition String?  // NM / EX / OTHER
+originalQty       Int?
+originalUnitCents Int?
+adminNote         String?
+
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 

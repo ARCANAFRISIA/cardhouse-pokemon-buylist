@@ -111,7 +111,7 @@ function mapPowertoolsRow(row: CsvRow, payoutPct: number) {
     finishType,
   });
 
-  const buyPriceCents = floorBuyPrice(priceCents, DEFAULT_PAYOUT_PCT);
+  const buyPriceCents = floorBuyPrice(priceCents, payoutPct);
 
   return {
     cardKey,
