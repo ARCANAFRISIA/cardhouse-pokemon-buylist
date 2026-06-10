@@ -22,6 +22,11 @@ const SubmitSchema = z.object({
     paypalEmail: z.string().trim().max(180).optional().or(z.literal("")),
 
     customerMessage: z.string().trim().max(2000).optional().or(z.literal("")),
+
+acceptTerms: z.literal(true),
+confirmEnglishNm: z.literal(true),
+confirmSorted: z.literal(true),
+confirmNoteIncluded: z.literal(true),
   }),
   items: z
     .array(

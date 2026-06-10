@@ -55,6 +55,10 @@ export default function SubmitPage() {
   const [iban, setIban] = useState("");
   const [paypalEmail, setPaypalEmail] = useState("");
   const [customerMessage, setCustomerMessage] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
+const [confirmEnglishNm, setConfirmEnglishNm] = useState(false);
+const [confirmSorted, setConfirmSorted] = useState(false);
+const [confirmNoteIncluded, setConfirmNoteIncluded] = useState(false);
 
   useEffect(() => {
     try {
@@ -80,6 +84,9 @@ export default function SubmitPage() {
     [cart]
   );
 
+  const allChecksAccepted =
+  acceptTerms && confirmEnglishNm && confirmSorted && confirmNoteIncluded;
+
   async function submit() {
     if (cart.length === 0 || busy) return;
 
@@ -94,18 +101,22 @@ export default function SubmitPage() {
         },
         body: JSON.stringify({
           customer: {
-            fullName,
-            email,
-            phone,
-            addressLine1,
-            postalCode,
-            city,
-            country,
-            payoutMethod,
-            iban,
-            paypalEmail,
-            customerMessage,
-          },
+  fullName,
+  email,
+  phone,
+  addressLine1,
+  postalCode,
+  city,
+  country,
+  payoutMethod,
+  iban,
+  paypalEmail,
+  customerMessage,
+  acceptTerms,
+  confirmEnglishNm,
+  confirmSorted,
+  confirmNoteIncluded,
+},
           items: cart.map((item) => ({
             cardKey: item.cardKey,
             qty: item.qty,
@@ -150,9 +161,10 @@ export default function SubmitPage() {
             <h1 className="mt-4 text-4xl font-black">Bedankt!</h1>
 
             <p className="mt-4 text-neutral-600">
-              Je buylist is ontvangen. Card House controleert je lijst en neemt
-              contact met je op.
-            </p>
+  Je buylist is ontvangen. Je kunt je kaarten nu opsturen naar Card House.
+  Sorteer de kaarten op dezelfde volgorde als je buylist en voeg een briefje
+  toe met je naam, e-mailadres en referentie.
+</p>
 
             <div className="mt-6 rounded-2xl bg-neutral-50 p-5 text-sm">
               <div className="flex justify-between">
@@ -168,6 +180,28 @@ export default function SubmitPage() {
                 <strong>{euroCents(result.totalCents)}</strong>
               </div>
             </div>
+
+<div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-left text-sm leading-6 text-neutral-800">
+  <div className="flex items-start gap-3">
+    <div className="mt-1 h-2.5 w-2.5 rounded-full bg-red-600" />
+    <div>
+      <strong className="text-neutral-950">Verzendinstructies</strong>
+
+      <ul className="mt-2 list-disc space-y-1 pl-5">
+        <li>Leg je kaarten op dezelfde volgorde als deze buylist.</li>
+        <li>
+          Voeg een briefje toe met je naam, e-mailadres en referentie:{" "}
+          <strong>{result.submissionId?.slice(0, 8)}</strong>
+        </li>
+        <li>Verpak je kaarten goed, zodat ze niet beschadigen tijdens verzending.</li>
+        <li>
+          De definitieve uitbetaling wordt vastgesteld nadat Card House de kaarten
+          heeft gecontroleerd.
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
 
             <Link
               href="/"
@@ -329,6 +363,67 @@ export default function SubmitPage() {
               />
             </div>
 
+ <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
+  <h2 className="text-lg font-black">Voordat je indient</h2>
+
+  <p className="mt-2 text-sm leading-6 text-neutral-600">
+    Na het indienen kun je je kaarten direct opsturen naar Card House.
+    Volg onderstaande stappen, zodat je buylist snel gecontroleerd kan worden.
+  </p>
+
+  <div className="mt-4 space-y-3 text-sm">
+    <label className="flex gap-3 rounded-xl bg-white p-3">
+      <input
+        type="checkbox"
+        checked={acceptTerms}
+        onChange={(e) => setAcceptTerms(e.target.checked)}
+        className="mt-1"
+      />
+      <span>
+        Ik ga akkoord met de buylistvoorwaarden en begrijp dat de definitieve
+        uitbetaling wordt vastgesteld na controle.
+      </span>
+    </label>
+
+    <label className="flex gap-3 rounded-xl bg-white p-3">
+      <input
+        type="checkbox"
+        checked={confirmEnglishNm}
+        onChange={(e) => setConfirmEnglishNm(e.target.checked)}
+        className="mt-1"
+      />
+      <span>
+        Ik bevestig dat de ingestuurde kaarten Engels en Near Mint zijn.
+        Als een kaart niet Near Mint is, mag Card House de uitbetaling aanpassen.
+      </span>
+    </label>
+
+    <label className="flex gap-3 rounded-xl bg-white p-3">
+      <input
+        type="checkbox"
+        checked={confirmSorted}
+        onChange={(e) => setConfirmSorted(e.target.checked)}
+        className="mt-1"
+      />
+      <span>
+        Ik leg de kaarten op dezelfde volgorde als deze buylist.
+      </span>
+    </label>
+
+    <label className="flex gap-3 rounded-xl bg-white p-3">
+      <input
+        type="checkbox"
+        checked={confirmNoteIncluded}
+        onChange={(e) => setConfirmNoteIncluded(e.target.checked)}
+        className="mt-1"
+      />
+      <span>
+        Ik voeg een briefje toe met mijn naam en e-mailadres in het pakket.
+      </span>
+    </label>
+  </div>
+</div>
+
             {result && !result.ok && (
               <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                 {result.error ?? "Submission failed"}
@@ -338,10 +433,10 @@ export default function SubmitPage() {
             <button
               type="button"
               onClick={submit}
-              disabled={busy || cart.length === 0 || !fullName || !email}
+              disabled={busy || cart.length === 0 || !fullName || !email || !allChecksAccepted}
               className="rounded-2xl bg-red-600 px-6 py-4 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {busy ? "Submitting..." : "Submit buylist"}
+              {busy ? "Indienen..." : "Buylist indienen"}
             </button>
           </div>
         </div>
