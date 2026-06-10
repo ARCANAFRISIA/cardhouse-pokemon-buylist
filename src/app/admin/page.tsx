@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { ImportBatch } from "@prisma/client";
 
 function euro(cents: number) {
   return `€ ${(cents / 100).toLocaleString("nl-NL", {
@@ -8,15 +9,14 @@ function euro(cents: number) {
 }
 
 export default async function AdminPage() {
-  const [submissions, cards, prices, imports] = await Promise.all([
-    prisma.submission.count(),
-    prisma.pokemonCard.count(),
-    prisma.pokemonPrice.count(),
-    prisma.importBatch.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 5,
-    }),
-  ]);
+  const submissions = await prisma.submission.count();
+  const cards = await prisma.pokemonCard.count();
+  const prices = await prisma.pokemonPrice.count();
+
+  const imports: ImportBatch[] = await prisma.importBatch.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 5,
+  });
 
   const openTotal = await prisma.submission.aggregate({
     where: {
