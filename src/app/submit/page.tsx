@@ -380,8 +380,11 @@ const [confirmNoteIncluded, setConfirmNoteIncluded] = useState(false);
         className="mt-1"
       />
       <span>
-        Ik ga akkoord met de buylistvoorwaarden en begrijp dat de definitieve
-        uitbetaling wordt vastgesteld na controle.
+        Ik ga akkoord met de{" "}
+<Link href="/terms" className="font-semibold text-red-600 underline">
+  buylistvoorwaarden
+</Link>{" "}
+en begrijp dat de definitieve uitbetaling wordt vastgesteld na controle.
       </span>
     </label>
 

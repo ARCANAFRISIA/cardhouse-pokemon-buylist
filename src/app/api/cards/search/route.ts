@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getBuylistSettings } from "@/lib/buylistSettings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,7 @@ function toEuro(cents: number | null) {
 export async function GET(req: NextRequest) {
   try {
     const query = (req.nextUrl.searchParams.get("q") ?? "").trim();
+    const settings = await getBuylistSettings();
     const limit = Math.min(
       Math.max(Number(req.nextUrl.searchParams.get("limit") ?? 50), 1),
       100
@@ -25,7 +27,7 @@ export async function GET(req: NextRequest) {
         some: {
           isCurrent: true,
           buyPriceCents: {
-            gte: 100,
+            gte: settings.minimumBuyPriceCents,
           },
         },
       },
@@ -73,7 +75,10 @@ export async function GET(req: NextRequest) {
       .map((card) => {
         const price = card.prices[0] ?? null;
 
-        if (!price?.buyPriceCents || price.buyPriceCents < 100) {
+        if (
+  !price?.buyPriceCents ||
+  price.buyPriceCents < settings.minimumBuyPriceCents
+) {
           return null;
         }
 

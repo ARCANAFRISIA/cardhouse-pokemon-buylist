@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { parseCsv, type CsvRow } from "@/lib/csv";
+import { getBuylistSettings } from "@/lib/buylistSettings";
 
-const DEFAULT_PAYOUT_PCT = 70;
+
 
 function normalizeText(value: unknown) {
   return String(value ?? "").trim();
@@ -71,7 +72,7 @@ function makeCardKey(input: {
   ].join("|");
 }
 
-function mapPowertoolsRow(row: CsvRow) {
+function mapPowertoolsRow(row: CsvRow, payoutPct: number) {
   const cardmarketId = parseIntLoose(
     getValue(row, ["cardmarketId", "idProduct", "productId", "id"])
   );
@@ -132,9 +133,12 @@ export async function importPowertoolsCsv(input: {
   text: string;
   filename?: string;
 }) {
-  const rows = parseCsv(input.text);
-  let imported = 0;
-  let skipped = 0;
+const rows = parseCsv(input.text);
+const settings = await getBuylistSettings();
+const payoutPct = settings.generalPayoutPct;
+
+let imported = 0;
+let skipped = 0;
 
   const batch = await prisma.importBatch.create({
     data: {
@@ -148,7 +152,7 @@ export async function importPowertoolsCsv(input: {
 
   try {
     for (const row of rows) {
-      const mapped = mapPowertoolsRow(row);
+      const mapped = mapPowertoolsRow(row, payoutPct);
 
       if (!mapped) {
         skipped++;
@@ -207,7 +211,7 @@ export async function importPowertoolsCsv(input: {
           source: "POWERTOOLS",
           marketPriceCents: mapped.marketPriceCents,
           buyPriceCents: mapped.buyPriceCents,
-          payoutPct: DEFAULT_PAYOUT_PCT,
+          payoutPct,
           isCurrent: true,
         },
       });

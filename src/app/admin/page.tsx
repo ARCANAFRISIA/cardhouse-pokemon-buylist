@@ -67,7 +67,15 @@ export default async function AdminPage() {
   >
     Import PowerTools CSV
   </a>
+
+  <a
+  href="/admin/settings"
+  className="rounded-full border border-white/20 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white hover:text-neutral-950"
+>
+  Settings
+</a>
 </div>
+
 
         <div className="grid gap-4 md:grid-cols-4">
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
