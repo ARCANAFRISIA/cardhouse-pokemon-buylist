@@ -9,7 +9,8 @@ datasource db {
 model PokemonCard {
   id              String   @id @default(cuid())
 
-  cardmarketId    Int      @unique
+  cardKey         String   @unique
+  cardmarketId    Int
   name            String
   setName         String?
   setCode         String?
@@ -29,6 +30,7 @@ model PokemonCard {
 
   prices          PokemonPrice[]
 
+  @@index([cardmarketId])
   @@index([name])
   @@index([setCode])
   @@index([series])
@@ -39,6 +41,7 @@ model PokemonCard {
 model PokemonPrice {
   id                    String   @id @default(cuid())
 
+  cardKey               String
   cardmarketId           Int
   source                 String   // POWERTOOLS, CM_PRICE_GUIDE, MANUAL
   marketPriceCents       Int?
@@ -52,8 +55,9 @@ model PokemonPrice {
   importedAt             DateTime @default(now())
   isCurrent              Boolean  @default(true)
 
-  card                   PokemonCard @relation(fields: [cardmarketId], references: [cardmarketId], onDelete: Cascade)
+  card                   PokemonCard @relation(fields: [cardKey], references: [cardKey], onDelete: Cascade)
 
+  @@index([cardKey])
   @@index([cardmarketId])
   @@index([source])
   @@index([isCurrent])
@@ -101,6 +105,7 @@ model SubmissionItem {
   id               String     @id @default(cuid())
 
   submissionId     String
+  cardKey          String?
   cardmarketId     Int
 
   cardName         String
@@ -126,6 +131,7 @@ model SubmissionItem {
 
   @@index([submissionId])
   @@index([cardmarketId])
+  @@index([cardKey])
 }
 
 model ImportBatch {

@@ -42,6 +42,15 @@ export default async function AdminPage() {
           </p>
         </div>
 
+        <div className="mt-6 flex gap-3">
+  <a
+    href="/admin/import"
+    className="rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+  >
+    Import PowerTools CSV
+  </a>
+</div>
+
         <div className="grid gap-4 md:grid-cols-4">
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
             <p className="text-sm text-neutral-400">Submissions</p>
