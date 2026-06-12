@@ -5,6 +5,8 @@ import { getBuylistSettings } from "@/lib/buylistSettings";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type SortKey = "name" | "price_desc" | "price_asc" | "set" | "updated";
+
 function toEuro(cents: number | null) {
   if (cents == null) return null;
   return Math.round(cents) / 100;
@@ -15,44 +17,88 @@ function normalizeFilter(value: string | null) {
   return clean && clean !== "all" ? clean : null;
 }
 
+function makeBaseWhere(minimumBuyPriceCents: number) {
+  return {
+    active: true,
+    language: "English",
+    condition: "NM",
+    prices: {
+      some: {
+        isCurrent: true,
+        buyPriceCents: {
+          gte: minimumBuyPriceCents,
+        },
+      },
+    },
+  };
+}
+
+function sortItems<T extends { name: string; setName: string | null; collectorNumber: string | null; buyPrice: number | null; importedAt: Date | string | null }>(
+  items: T[],
+  sort: SortKey
+) {
+  const byName = (a: T, b: T) =>
+    a.name.localeCompare(b.name) ||
+    String(a.setName ?? "").localeCompare(String(b.setName ?? "")) ||
+    String(a.collectorNumber ?? "").localeCompare(String(b.collectorNumber ?? ""), undefined, {
+      numeric: true,
+    });
+
+  return [...items].sort((a, b) => {
+    if (sort === "price_desc") {
+      return (b.buyPrice ?? 0) - (a.buyPrice ?? 0) || byName(a, b);
+    }
+
+    if (sort === "price_asc") {
+      return (a.buyPrice ?? 0) - (b.buyPrice ?? 0) || byName(a, b);
+    }
+
+    if (sort === "set") {
+      return (
+        String(a.setName ?? "").localeCompare(String(b.setName ?? "")) ||
+        String(a.collectorNumber ?? "").localeCompare(String(b.collectorNumber ?? ""), undefined, {
+          numeric: true,
+        }) ||
+        byName(a, b)
+      );
+    }
+
+    if (sort === "updated") {
+      return new Date(b.importedAt ?? 0).getTime() - new Date(a.importedAt ?? 0).getTime() || byName(a, b);
+    }
+
+    return byName(a, b);
+  });
+}
+
 export async function GET(req: NextRequest) {
   try {
     const query = (req.nextUrl.searchParams.get("q") ?? "").trim();
-    const setCode = normalizeFilter(req.nextUrl.searchParams.get("setCode"));
-    const rarity = normalizeFilter(req.nextUrl.searchParams.get("rarity"));
-    const sort = req.nextUrl.searchParams.get("sort") ?? "name-asc";
+    const selectedSet = normalizeFilter(req.nextUrl.searchParams.get("setCode"));
+    const selectedRarity = normalizeFilter(req.nextUrl.searchParams.get("rarity"));
+    const sortParam = (req.nextUrl.searchParams.get("sort") ?? "name") as SortKey;
+    const sort: SortKey = ["name", "price_desc", "price_asc", "set", "updated"].includes(sortParam)
+      ? sortParam
+      : "name";
+
     const settings = await getBuylistSettings();
     const limit = Math.min(
       Math.max(Number(req.nextUrl.searchParams.get("limit") ?? 50), 1),
       100
     );
 
+    const baseWhere = makeBaseWhere(settings.minimumBuyPriceCents);
+
     const where = {
-      active: true,
-      language: "English",
-      condition: "NM",
-      prices: {
-        some: {
-          isCurrent: true,
-          buyPriceCents: {
-            gte: settings.minimumBuyPriceCents,
-          },
-        },
-      },
-      ...(setCode
+      ...baseWhere,
+      ...(selectedSet
         ? {
-            setCode: {
-              equals: setCode,
-              mode: "insensitive" as const,
-            },
+            setCode: selectedSet,
           }
         : {}),
-      ...(rarity
+      ...(selectedRarity
         ? {
-            rarity: {
-              equals: rarity,
-              mode: "insensitive" as const,
-            },
+            rarity: selectedRarity,
           }
         : {}),
       ...(query.length >= 2
@@ -78,25 +124,34 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const cards = await prisma.pokemonCard.findMany({
-      where,
-      orderBy:
-        sort === "newest"
-          ? [{ updatedAt: "desc" }, { name: "asc" }]
-          : [{ name: "asc" }, { setName: "asc" }],
-      take: limit,
-      include: {
-        prices: {
-          where: {
-            isCurrent: true,
+    const [cards, filterCards] = await Promise.all([
+      prisma.pokemonCard.findMany({
+        where,
+        orderBy: [{ name: "asc" }, { setName: "asc" }],
+        take: Math.max(limit, 100),
+        include: {
+          prices: {
+            where: {
+              isCurrent: true,
+            },
+            orderBy: {
+              importedAt: "desc",
+            },
+            take: 1,
           },
-          orderBy: {
-            importedAt: "desc",
-          },
-          take: 1,
         },
-      },
-    });
+      }),
+      prisma.pokemonCard.findMany({
+        where: baseWhere,
+        select: {
+          setCode: true,
+          setName: true,
+          rarity: true,
+        },
+        take: 5000,
+        orderBy: [{ setName: "asc" }, { rarity: "asc" }],
+      }),
+    ]);
 
     const items = cards
       .map((card) => {
@@ -126,69 +181,37 @@ export async function GET(req: NextRequest) {
           importedAt: price.importedAt,
         };
       })
-      .filter(Boolean)
-      .sort((a: any, b: any) => {
-        if (sort === "price-desc") return (b.buyPrice ?? 0) - (a.buyPrice ?? 0);
-        if (sort === "price-asc") return (a.buyPrice ?? 0) - (b.buyPrice ?? 0);
-        if (sort === "set") {
-          const setCompare = String(a.setName ?? "").localeCompare(String(b.setName ?? ""));
-          if (setCompare !== 0) return setCompare;
-          return String(a.collectorNumber ?? "").localeCompare(String(b.collectorNumber ?? ""), undefined, { numeric: true });
-        }
-        return String(a.name ?? "").localeCompare(String(b.name ?? ""));
-      });
+      .filter((item): item is NonNullable<typeof item> => item !== null);
 
-    const filterRows = await prisma.pokemonCard.findMany({
-      where: {
-        active: true,
-        language: "English",
-        condition: "NM",
-        prices: {
-          some: {
-            isCurrent: true,
-            buyPriceCents: {
-              gte: settings.minimumBuyPriceCents,
-            },
-          },
-        },
-      },
-      select: {
-        setCode: true,
-        setName: true,
-        rarity: true,
-      },
-      distinct: ["setCode", "setName", "rarity"],
-      take: 5000,
-    });
+    const sortedItems = sortItems(items, sort).slice(0, limit);
 
-    const setOptions = Array.from(
-      new Map(
-        filterRows
-          .filter((row) => row.setCode || row.setName)
-          .map((row) => [
-            row.setCode || row.setName || "",
-            {
-              setCode: row.setCode || row.setName || "",
-              label: row.setName
-                ? `${row.setName}${row.setCode ? ` (${row.setCode})` : ""}`
-                : row.setCode || "Unknown set",
-            },
-          ])
-      ).values()
-    ).sort((a, b) => a.label.localeCompare(b.label));
+    const setMap = new Map<string, { value: string; label: string }>();
+    const raritySet = new Set<string>();
 
-    const rarityOptions = Array.from(
-      new Set(filterRows.map((row) => row.rarity).filter((value): value is string => Boolean(value)))
-    ).sort((a, b) => a.localeCompare(b));
+    for (const card of filterCards) {
+      if (card.setCode) {
+        setMap.set(card.setCode, {
+          value: card.setCode,
+          label: card.setName ? `${card.setName} (${card.setCode})` : card.setCode,
+        });
+      }
+
+      if (card.rarity) {
+        raritySet.add(card.rarity);
+      }
+    }
+
+    const sets = Array.from(setMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+    const rarities = Array.from(raritySet.values()).sort((a, b) => a.localeCompare(b));
 
     return NextResponse.json({
       ok: true,
       query,
-      count: items.length,
-      items,
+      count: sortedItems.length,
+      items: sortedItems,
       filters: {
-        sets: setOptions,
-        rarities: rarityOptions,
+        sets,
+        rarities,
       },
     });
   } catch (error: any) {
