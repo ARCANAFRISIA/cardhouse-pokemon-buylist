@@ -226,10 +226,14 @@ export default function BulkPage() {
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-right text-red-950">
-                          <p className="text-xs font-semibold text-red-700">We pay</p>
-                          <p className="text-2xl font-black">{euro(category.unitPrice)}</p>
-                          <p className="text-xs text-red-700">per stuk</p>
+                        <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-5 py-4 text-right text-neutral-950">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                            Vaste bulkprijs
+                          </p>
+                          <p className="text-2xl font-black text-red-700">
+                            {euro(category.unitPrice)}
+                          </p>
+                          <p className="text-xs text-neutral-500">per stuk</p>
                         </div>
                       </div>
 
@@ -251,7 +255,11 @@ export default function BulkPage() {
                             <p className="text-xs text-neutral-500">Estimated</p>
                             <strong>{euro(category.unitPrice * qty)}</strong>
                           </div>
-                          <button type="button" onClick={() => addBulk(category)} className="rounded-2xl bg-red-600 px-5 py-3 font-semibold text-white hover:bg-red-700">
+                          <button
+                            type="button"
+                            onClick={() => addBulk(category)}
+                            className="rounded-2xl bg-red-600 px-6 py-4 text-base font-black text-white hover:bg-red-700 sm:px-5 sm:py-3 sm:text-sm sm:font-semibold"
+                          >
                             Add bulk
                           </button>
                         </div>

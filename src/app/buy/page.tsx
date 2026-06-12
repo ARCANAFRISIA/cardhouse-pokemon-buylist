@@ -54,7 +54,7 @@ function lineTotal(item: CartItem) {
 }
 
 function CardImage(props: { item: Pick<SearchItem, "name" | "imageUrl">; size?: "sm" | "md" }) {
-  const sizeClass = props.size === "sm" ? "h-14 w-10" : "h-28 w-20";
+  const sizeClass = props.size === "sm" ? "h-14 w-10" : "h-24 w-[4.25rem] sm:h-28 sm:w-20";
 
   if (!props.item.imageUrl) {
     return (
@@ -385,51 +385,57 @@ export default function BuyPage() {
                 return (
                   <article
                     key={item.cardKey}
-                    className="grid gap-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm md:grid-cols-[auto_1fr_auto]"
+                    className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm"
                   >
-                    <CardImage item={item} />
+                    <div className="grid grid-cols-[auto_1fr] gap-4 md:grid-cols-[auto_1fr_auto] md:items-center">
+                      <CardImage item={item} />
 
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-lg font-bold">{item.name}</h3>
-                        <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700">
-                          Buying
-                        </span>
-                        {inCartQty > 0 && (
-                          <span className="rounded-full bg-neutral-950 px-3 py-1 text-xs font-bold text-white">
-                            {inCartQty} in list
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-xl font-black leading-tight sm:text-lg sm:font-bold">
+                            {item.name}
+                          </h3>
+                          <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700">
+                            Buying
                           </span>
-                        )}
-                      </div>
+                          {inCartQty > 0 && (
+                            <span className="rounded-full bg-neutral-950 px-3 py-1 text-xs font-bold text-white">
+                              {inCartQty} in list
+                            </span>
+                          )}
+                        </div>
 
-                      <p className="mt-1 text-sm text-neutral-600">
-                        {item.setName ?? "Unknown set"}
-                        {item.setCode ? ` • ${item.setCode}` : ""}
-                        {item.collectorNumber ? ` • #${item.collectorNumber}` : ""}
-                        {item.rarity ? ` • ${item.rarity}` : ""}
-                      </p>
-
-                      <p className="mt-2 text-xs text-neutral-500">
-                        {item.language} • {item.condition} • {item.finishType} • CM{" "}
-                        {item.cardmarketId}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-3 md:justify-end">
-                      <div className="min-w-28 rounded-2xl border border-red-100 bg-red-50 px-5 py-3 text-right text-red-700">
-                        <p className="text-xs font-bold uppercase tracking-wide text-red-500">
-                          We pay
+                        <p className="mt-1 text-sm leading-5 text-neutral-600 sm:leading-normal">
+                          {item.setName ?? "Unknown set"}
+                          {item.setCode ? ` • ${item.setCode}` : ""}
+                          {item.collectorNumber ? ` • #${item.collectorNumber}` : ""}
+                          {item.rarity ? ` • ${item.rarity}` : ""}
                         </p>
-                        <p className="text-xl font-black">{euro(item.buyPrice)}</p>
+
+                        <p className="mt-2 text-xs text-neutral-500">
+                          {item.language} • {item.condition} • {item.finishType} • CM{" "}
+                          {item.cardmarketId}
+                        </p>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => addToCart(item)}
-                        className="rounded-2xl bg-red-600 px-5 py-3 font-semibold text-white hover:bg-red-700"
-                      >
-                        Add
-                      </button>
+                      <div className="col-span-2 mt-1 flex items-center gap-3 md:col-span-1 md:mt-0 md:justify-end">
+                        <div className="flex min-w-[9rem] flex-1 items-center justify-between rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-red-700 md:block md:min-w-28 md:flex-none md:text-right">
+                          <p className="text-[11px] font-bold uppercase tracking-wide text-red-500">
+                            We pay
+                          </p>
+                          <p className="text-2xl font-black leading-none md:text-xl">
+                            {euro(item.buyPrice)}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => addToCart(item)}
+                          className="min-w-[7.25rem] rounded-2xl bg-red-600 px-5 py-4 text-base font-black text-white hover:bg-red-700 md:min-w-0 md:py-3 md:font-semibold"
+                        >
+                          Add
+                        </button>
+                      </div>
                     </div>
                   </article>
                 );
