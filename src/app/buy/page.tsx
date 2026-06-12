@@ -462,8 +462,7 @@ export default function BuyPage() {
                         </p>
 
                         <p className="mt-2 text-sm text-neutral-500 sm:mt-2 sm:text-xs">
-                          Engels • {item.condition} • {item.finishType} • CM{" "}
-                          {item.cardmarketId}
+                          Engels • {item.condition} • {item.finishType}
                         </p>
                       </div>
                     </div>
