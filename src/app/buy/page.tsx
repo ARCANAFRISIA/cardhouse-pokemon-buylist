@@ -26,6 +26,20 @@ type CartItem = SearchItem & {
   qty: number;
 };
 
+type FilterSet = {
+  setCode: string;
+  label: string;
+};
+
+type SearchResponse = {
+  ok: boolean;
+  items?: SearchItem[];
+  filters?: {
+    sets?: FilterSet[];
+    rarities?: string[];
+  };
+};
+
 function euro(value: number | null) {
   if (value == null) return "—";
 
@@ -39,43 +53,73 @@ function lineTotal(item: CartItem) {
   return (item.buyPrice ?? 0) * item.qty;
 }
 
+function CardImage(props: { item: Pick<SearchItem, "name" | "imageUrl">; size?: "sm" | "md" }) {
+  const sizeClass = props.size === "sm" ? "h-14 w-10" : "h-28 w-20";
+
+  if (!props.item.imageUrl) {
+    return (
+      <div
+        className={`${sizeClass} flex shrink-0 items-center justify-center rounded-xl border border-neutral-200 bg-neutral-100 text-[10px] font-bold text-neutral-400`}
+      >
+        NO IMG
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={props.item.imageUrl}
+      alt={props.item.name}
+      loading="lazy"
+      className={`${sizeClass} shrink-0 rounded-xl object-cover shadow-sm ring-1 ring-neutral-200`}
+    />
+  );
+}
+
 export default function BuyPage() {
   const [q, setQ] = useState("");
+  const [setCode, setSetCode] = useState("all");
+  const [rarity, setRarity] = useState("all");
+  const [sort, setSort] = useState("name-asc");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [items, setItems] = useState<SearchItem[]>([]);
+  const [setOptions, setSetOptions] = useState<FilterSet[]>([]);
+  const [rarityOptions, setRarityOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartLoaded, setCartLoaded] = useState(false);
 
   const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
   const cartTotal = cart.reduce((sum, item) => sum + lineTotal(item), 0);
+  const hasActiveFilters = setCode !== "all" || rarity !== "all" || sort !== "name-asc";
 
   const searchLabel = useMemo(() => {
-    if (loading) return "Searching...";
-    if (items.length === 0) return "No buylist cards found";
-    return `${items.length} buylist card${items.length === 1 ? "" : "s"} found`;
+    if (loading) return "Zoeken...";
+    if (items.length === 0) return "Geen kaarten gevonden";
+    return `${items.length} kaart${items.length === 1 ? "" : "en"} gevonden`;
   }, [loading, items.length]);
 
   useEffect(() => {
-  try {
-    const raw = window.localStorage.getItem("cardhouse-buylist-cart");
-    if (raw) {
-      const parsed = JSON.parse(raw) as CartItem[];
-      if (Array.isArray(parsed)) {
-        setCart(parsed);
+    try {
+      const raw = window.localStorage.getItem("cardhouse-buylist-cart");
+      if (raw) {
+        const parsed = JSON.parse(raw) as CartItem[];
+        if (Array.isArray(parsed)) {
+          setCart(parsed);
+        }
       }
+    } catch (error) {
+      console.error("Failed to load cart", error);
+    } finally {
+      setCartLoaded(true);
     }
-  } catch (error) {
-    console.error("Failed to load cart", error);
-  } finally {
-    setCartLoaded(true);
-  }
-}, []);
+  }, []);
 
-useEffect(() => {
-  if (!cartLoaded) return;
+  useEffect(() => {
+    if (!cartLoaded) return;
 
-  window.localStorage.setItem("cardhouse-buylist-cart", JSON.stringify(cart));
-}, [cart, cartLoaded]);
+    window.localStorage.setItem("cardhouse-buylist-cart", JSON.stringify(cart));
+  }, [cart, cartLoaded]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -85,19 +129,21 @@ useEffect(() => {
 
       try {
         const params = new URLSearchParams();
-        if (q.trim().length >= 2) {
-          params.set("q", q.trim());
-        }
+        if (q.trim().length >= 2) params.set("q", q.trim());
+        if (setCode !== "all") params.set("setCode", setCode);
+        if (rarity !== "all") params.set("rarity", rarity);
+        if (sort !== "name-asc") params.set("sort", sort);
+        params.set("t", Date.now().toString());
 
-    params.set("t", Date.now().toString());
+        const res = await fetch(`/api/cards/search?${params.toString()}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
 
-const res = await fetch(`/api/cards/search?${params.toString()}`, {
-  signal: controller.signal,
-  cache: "no-store",
-});
-
-        const json = await res.json();
+        const json = (await res.json()) as SearchResponse;
         setItems(json.items ?? []);
+        setSetOptions(json.filters?.sets ?? []);
+        setRarityOptions(json.filters?.rarities ?? []);
       } catch (error: any) {
         if (error?.name !== "AbortError") {
           console.error("Search failed", error);
@@ -113,7 +159,7 @@ const res = await fetch(`/api/cards/search?${params.toString()}`, {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [q]);
+  }, [q, setCode, rarity, sort]);
 
   function addToCart(item: SearchItem) {
     if (!item.buyPrice || item.buyPrice <= 0) return;
@@ -151,10 +197,16 @@ const res = await fetch(`/api/cards/search?${params.toString()}`, {
     setCart([]);
   }
 
+  function resetFilters() {
+    setSetCode("all");
+    setRarity("all");
+    setSort("name-asc");
+  }
+
   return (
     <main className="min-h-screen bg-neutral-50 text-neutral-950">
       <header className="border-b border-neutral-200 bg-neutral-950 text-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 sm:py-5">
           <Link href="/" className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-black text-neutral-950">
               CH
@@ -166,27 +218,27 @@ const res = await fetch(`/api/cards/search?${params.toString()}`, {
           </Link>
 
           <Link
-            href="/"
-            className="rounded-full border border-white/20 px-4 py-2 text-sm text-neutral-200 hover:bg-white hover:text-neutral-950"
+            href="/bulk"
+            className="hidden rounded-full border border-white/20 px-4 py-2 text-sm text-neutral-200 hover:bg-white hover:text-neutral-950 sm:inline-flex"
           >
-            Home
+            Bulk buy
           </Link>
         </div>
       </header>
 
-      <section className="mx-auto max-w-6xl px-6 py-10">
-        <div className="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
-          <div className="grid gap-8 md:grid-cols-[1fr_320px] md:items-end">
+      <section className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+        <div className="rounded-[2rem] border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="grid gap-6 md:grid-cols-[1fr_320px] md:items-end">
             <div>
               <p className="text-sm font-bold uppercase tracking-[0.25em] text-red-600">
                 Pokémon Buylist
               </p>
               <h1 className="mt-3 text-4xl font-black tracking-tight md:text-5xl">
-                Zoek je Pokémon kaarten
+                Verkoop je Pokémon kaarten
               </h1>
               <p className="mt-4 max-w-2xl text-neutral-600">
-                Wij kopen momenteel Engelse Near Mint hits. De getoonde prijs is
-                een indicatie en wordt definitief na controle.
+                Zoek je kaart, voeg hem toe aan je buylist en dien je lijst online in.
+                De definitieve uitbetaling wordt vastgesteld na controle.
               </p>
             </div>
 
@@ -206,15 +258,30 @@ const res = await fetch(`/api/cards/search?${params.toString()}`, {
             </div>
           </div>
 
+          <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
+            <div>
+              <strong>Goedkope ex/V/VMAX/VSTAR bulk?</strong>
+              <p className="mt-1 text-sm text-neutral-600">
+                Gebruik bulk buy voor kaarten die je niet los wilt opzoeken.
+              </p>
+            </div>
+            <Link
+              href="/bulk"
+              className="mt-4 inline-flex rounded-full bg-red-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-red-700 sm:mt-0"
+            >
+              Naar bulk buy
+            </Link>
+          </div>
+
           <div className="mt-8">
             <label className="text-sm font-semibold text-neutral-700">
-              Search by card name, set or number
+              Zoek op kaartnaam, set of nummer
             </label>
-            <div className="mt-2 flex gap-3">
+            <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_auto]">
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Example: Charizard, Pikachu, 215, Obsidian Flames..."
+                placeholder="Bijvoorbeeld: Charizard, Pikachu, 215, Obsidian Flames..."
                 className="w-full rounded-2xl border border-neutral-300 px-5 py-4 outline-none focus:border-red-500"
               />
               <button
@@ -225,15 +292,89 @@ const res = await fetch(`/api/cards/search?${params.toString()}`, {
               </button>
             </div>
           </div>
+
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((open) => !open)}
+              className="rounded-full border border-neutral-300 px-4 py-2 text-sm font-bold text-neutral-700 hover:border-red-500 hover:text-red-600 md:hidden"
+            >
+              {filtersOpen ? "Filters verbergen" : "Filters tonen"}
+              {hasActiveFilters ? " • actief" : ""}
+            </button>
+
+            <div className={["mt-4 grid gap-3 md:grid md:grid-cols-4", filtersOpen ? "grid" : "hidden"].join(" ")}>
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wide text-neutral-500">
+                  Set
+                </span>
+                <select
+                  value={setCode}
+                  onChange={(e) => setSetCode(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none focus:border-red-500"
+                >
+                  <option value="all">Alle sets</option>
+                  {setOptions.map((option) => (
+                    <option key={option.setCode} value={option.setCode}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wide text-neutral-500">
+                  Rarity
+                </span>
+                <select
+                  value={rarity}
+                  onChange={(e) => setRarity(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none focus:border-red-500"
+                >
+                  <option value="all">Alle rarities</option>
+                  {rarityOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wide text-neutral-500">
+                  Sortering
+                </span>
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none focus:border-red-500"
+                >
+                  <option value="name-asc">Naam A-Z</option>
+                  <option value="price-desc">Hoogste prijs</option>
+                  <option value="price-asc">Laagste prijs</option>
+                  <option value="set">Setvolgorde</option>
+                  <option value="newest">Nieuwste update</option>
+                </select>
+              </label>
+
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  disabled={!hasActiveFilters}
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-3 text-sm font-bold text-neutral-700 hover:border-red-500 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Reset filters
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_360px]">
           <section>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4">
               <h2 className="text-xl font-bold">{searchLabel}</h2>
-              <p className="text-sm text-neutral-500">
-                Prices from current PowerTools import
-              </p>
             </div>
 
             <div className="mt-4 grid gap-3">
@@ -244,9 +385,11 @@ const res = await fetch(`/api/cards/search?${params.toString()}`, {
                 return (
                   <article
                     key={item.cardKey}
-                    className="grid gap-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_auto]"
+                    className="grid gap-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm md:grid-cols-[auto_1fr_auto]"
                   >
-                    <div>
+                    <CardImage item={item} />
+
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-lg font-bold">{item.name}</h3>
                         <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700">
@@ -272,9 +415,11 @@ const res = await fetch(`/api/cards/search?${params.toString()}`, {
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-4 md:justify-end">
-                      <div className="min-w-28 rounded-2xl bg-neutral-950 px-5 py-3 text-right text-white">
-                        <p className="text-xs text-neutral-400">We pay</p>
+                    <div className="flex items-center gap-3 md:justify-end">
+                      <div className="min-w-28 rounded-2xl border border-red-100 bg-red-50 px-5 py-3 text-right text-red-700">
+                        <p className="text-xs font-bold uppercase tracking-wide text-red-500">
+                          We pay
+                        </p>
                         <p className="text-xl font-black">{euro(item.buyPrice)}</p>
                       </div>
 
@@ -293,8 +438,7 @@ const res = await fetch(`/api/cards/search?${params.toString()}`, {
 
             {!loading && items.length === 0 && (
               <div className="mt-6 rounded-2xl border border-neutral-200 bg-white p-8 text-center text-neutral-600">
-                No cards found yet. Import more PowerTools data or search another
-                card.
+                Geen kaarten gevonden. Probeer een andere zoekterm of gebruik bulk buy voor goedkope ex/V/VMAX/VSTAR kaarten.
               </div>
             )}
           </section>
@@ -322,9 +466,7 @@ const res = await fetch(`/api/cards/search?${params.toString()}`, {
 
               <div className="mt-5 rounded-2xl bg-neutral-950 p-5 text-white">
                 <p className="text-sm text-neutral-400">Estimated payout</p>
-                <strong className="mt-1 block text-3xl">
-                  {euro(cartTotal)}
-                </strong>
+                <strong className="mt-1 block text-3xl">{euro(cartTotal)}</strong>
               </div>
 
               {cart.length === 0 ? (
@@ -339,14 +481,17 @@ const res = await fetch(`/api/cards/search?${params.toString()}`, {
                       className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4"
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <strong className="block leading-snug">{item.name}</strong>
-                          <span className="mt-1 block text-xs text-neutral-500">
-                            {item.setCode ?? item.setName ?? "Unknown set"}
-                            {item.collectorNumber
-                              ? ` • #${item.collectorNumber}`
-                              : ""}
-                          </span>
+                        <div className="flex min-w-0 gap-3">
+                          <CardImage item={item} size="sm" />
+                          <div className="min-w-0">
+                            <strong className="block leading-snug">{item.name}</strong>
+                            <span className="mt-1 block text-xs text-neutral-500">
+                              {item.setCode ?? item.setName ?? "Unknown set"}
+                              {item.collectorNumber
+                                ? ` • #${item.collectorNumber}`
+                                : ""}
+                            </span>
+                          </div>
                         </div>
 
                         <button
@@ -391,21 +536,21 @@ const res = await fetch(`/api/cards/search?${params.toString()}`, {
                 </div>
               )}
 
-<Link
-  href="/submit"
-  aria-disabled={cart.length === 0}
-  onClick={(e) => {
-    if (cart.length === 0) e.preventDefault();
-  }}
-  className={[
-    "mt-5 block w-full rounded-2xl px-5 py-4 text-center font-bold text-white",
-    cart.length === 0
-      ? "cursor-not-allowed bg-red-600 opacity-40"
-      : "bg-red-600 hover:bg-red-700",
-  ].join(" ")}
->
-  Continue with buylist
-</Link>
+              <Link
+                href="/submit"
+                aria-disabled={cart.length === 0}
+                onClick={(e) => {
+                  if (cart.length === 0) e.preventDefault();
+                }}
+                className={[
+                  "mt-5 block w-full rounded-2xl px-5 py-4 text-center font-bold text-white",
+                  cart.length === 0
+                    ? "cursor-not-allowed bg-red-600 opacity-40"
+                    : "bg-red-600 hover:bg-red-700",
+                ].join(" ")}
+              >
+                Continue with buylist
+              </Link>
 
               <p className="mt-4 text-xs leading-5 text-neutral-500">
                 Final payout is confirmed after checking version, language,

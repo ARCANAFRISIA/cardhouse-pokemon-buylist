@@ -3,15 +3,6 @@ export const runtime = "nodejs";
 
 import { prisma } from "@/lib/prisma";
 
-type ImportBatchRow = {
-  id: string;
-  type: string;
-  filename: string | null;
-  rowCount: number;
-  success: boolean;
-  createdAt: Date;
-};
-
 function euro(cents: number) {
   return `€ ${(cents / 100).toLocaleString("nl-NL", {
     minimumFractionDigits: 2,
@@ -19,123 +10,174 @@ function euro(cents: number) {
   })}`;
 }
 
+function DashboardCard(props: {
+  label: string;
+  value: string | number;
+  help?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
+      <p className="text-sm text-neutral-400">{props.label}</p>
+      <strong className="mt-2 block text-3xl text-white">{props.value}</strong>
+      {props.help && <p className="mt-2 text-xs text-neutral-500">{props.help}</p>}
+    </div>
+  );
+}
+
+function ActionCard(props: {
+  href: string;
+  title: string;
+  description: string;
+  primary?: boolean;
+}) {
+  return (
+    <a
+      href={props.href}
+      className={[
+        "block rounded-2xl border p-5 transition",
+        props.primary
+          ? "border-red-500/50 bg-red-600 text-white hover:bg-red-700"
+          : "border-white/10 bg-white/[0.04] text-white hover:border-white/25 hover:bg-white/[0.07]",
+      ].join(" ")}
+    >
+      <strong className="block text-lg">{props.title}</strong>
+      <p
+        className={[
+          "mt-2 text-sm leading-6",
+          props.primary ? "text-red-50" : "text-neutral-400",
+        ].join(" ")}
+      >
+        {props.description}
+      </p>
+    </a>
+  );
+}
+
 export default async function AdminPage() {
-  const submissions = await prisma.submission.count();
-  const cards = await prisma.pokemonCard.count();
-  const prices = await prisma.pokemonPrice.count();
+  const openStatuses = ["SUBMITTED", "RECEIVED", "CHECKING", "ADJUSTED"];
 
-  const imports = (await prisma.importBatch.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 5,
-  })) as ImportBatchRow[];
-
-  const openTotal = await prisma.submission.aggregate({
-    where: {
-      status: {
-        in: ["SUBMITTED", "RECEIVED", "CHECKING", "ADJUSTED"],
-      },
-    },
-    _sum: {
-      serverTotalCents: true,
-    },
-  });
+  const [openSubmissions, totalSubmissions, catalogCards, onlineCards, openTotal] =
+    await Promise.all([
+      prisma.submission.count({
+        where: {
+          status: {
+            in: openStatuses,
+          },
+        },
+      }),
+      prisma.submission.count(),
+      prisma.pokemonCard.count(),
+      prisma.pokemonCard.count({
+        where: {
+          active: true,
+          language: "English",
+          condition: "NM",
+          finishType: "Regular",
+          prices: {
+            some: {
+              isCurrent: true,
+              buyPriceCents: {
+                gte: 100,
+              },
+            },
+          },
+        },
+      }),
+      prisma.submission.aggregate({
+        where: {
+          status: {
+            in: openStatuses,
+          },
+        },
+        _sum: {
+          serverTotalCents: true,
+        },
+      }),
+    ]);
 
   return (
     <main className="min-h-screen bg-neutral-950 text-white">
       <section className="mx-auto max-w-6xl px-6 py-10">
-        <div className="mb-8">
+        <div>
           <p className="text-sm font-semibold uppercase tracking-[0.25em] text-red-400">
             Card House Buylist
           </p>
           <h1 className="mt-3 text-4xl font-bold">Admin dashboard</h1>
-          <p className="mt-2 text-neutral-400">
-            Pokémon inkoop, submissions en prijsimports.
+          <p className="mt-2 max-w-2xl text-neutral-400">
+            Dagelijks overzicht voor Pokémon inkoop. Gebruik de knoppen hieronder
+            voor inzendingen, catalogus, prijzen en instellingen.
           </p>
         </div>
 
-<div className="mt-6 flex flex-wrap gap-3">
-  <a
-    href="/admin/submissions"
-    className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-neutral-950 hover:bg-neutral-200"
-  >
-    View submissions
-  </a>
-
-  <a
-    href="/admin/import"
-    className="rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
-  >
-    Import PowerTools CSV
-  </a>
-
-  <a
-  href="/admin/settings"
-  className="rounded-full border border-white/20 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white hover:text-neutral-950"
->
-  Settings
-</a>
-</div>
-
-
-        <div className="grid gap-4 md:grid-cols-4">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-            <p className="text-sm text-neutral-400">Submissions</p>
-            <strong className="mt-2 block text-3xl">{submissions}</strong>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-            <p className="text-sm text-neutral-400">Catalog cards</p>
-            <strong className="mt-2 block text-3xl">{cards}</strong>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-            <p className="text-sm text-neutral-400">Price rows</p>
-            <strong className="mt-2 block text-3xl">{prices}</strong>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-            <p className="text-sm text-neutral-400">Open value</p>
-            <strong className="mt-2 block text-3xl">
-              {euro(openTotal._sum.serverTotalCents ?? 0)}
-            </strong>
-          </div>
+        <div className="mt-8 grid gap-4 md:grid-cols-4">
+          <DashboardCard
+            label="Open inzendingen"
+            value={openSubmissions}
+            help={`${totalSubmissions} totaal`}
+          />
+          <DashboardCard
+            label="Open uitbetaling"
+            value={euro(openTotal._sum.serverTotalCents ?? 0)}
+            help="Nog niet betaald"
+          />
+          <DashboardCard
+            label="Kaarten online"
+            value={onlineCards}
+            help="Zichtbaar op de buylist"
+          />
+          <DashboardCard
+            label="Catalogus"
+            value={catalogCards}
+            help="Actief en uitgeschakeld samen"
+          />
         </div>
 
-        <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-          <h2 className="text-xl font-semibold">Latest imports</h2>
+        <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <ActionCard
+            href="/admin/submissions"
+            title="Inzendingen"
+            description="Bekijk nieuwe en open buylists van klanten."
+            primary
+          />
+          <ActionCard
+            href="/admin/catalog"
+            title="Catalogus & prijzen"
+            description="Kaarten aan/uit zetten en PowerTools exports maken."
+          />
+          <ActionCard
+            href="/admin/import"
+            title="Prijzen uploaden"
+            description="Upload een PowerTools export om de buylist bij te werken."
+          />
+          <ActionCard
+            href="/admin/settings"
+            title="Instellingen"
+            description="Pas percentages, voorwaarden en verzendtekst aan."
+          />
+        </div>
 
-          {imports.length === 0 ? (
-            <p className="mt-4 text-neutral-400">No imports yet.</p>
-          ) : (
-            <div className="mt-4 overflow-hidden rounded-xl border border-white/10">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-white/[0.04] text-neutral-300">
-                  <tr>
-                    <th className="px-4 py-3">Type</th>
-                    <th className="px-4 py-3">Filename</th>
-                    <th className="px-4 py-3">Rows</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {imports.map((batch) => (
-                    <tr key={batch.id} className="border-t border-white/10">
-                      <td className="px-4 py-3">{batch.type}</td>
-                      <td className="px-4 py-3">{batch.filename ?? "—"}</td>
-                      <td className="px-4 py-3">{batch.rowCount}</td>
-                      <td className="px-4 py-3">
-                        {batch.success ? "Success" : "Failed"}
-                      </td>
-                      <td className="px-4 py-3">
-                        {batch.createdAt.toLocaleString("nl-NL")}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.04] p-6">
+          <h2 className="text-xl font-semibold">Snelle workflow</h2>
+          <div className="mt-4 grid gap-3 text-sm text-neutral-300 md:grid-cols-3">
+            <div className="rounded-xl bg-neutral-900 p-4">
+              <strong className="text-white">1. Exporteer naar PowerTools</strong>
+              <p className="mt-2 leading-6 text-neutral-400">
+                Ga naar Catalogus & prijzen en download een PowerTools CSV.
+              </p>
             </div>
-          )}
+            <div className="rounded-xl bg-neutral-900 p-4">
+              <strong className="text-white">2. Prijs in PowerTools</strong>
+              <p className="mt-2 leading-6 text-neutral-400">
+                Laat PowerTools de prijzen zetten en exporteer het resultaat.
+              </p>
+            </div>
+            <div className="rounded-xl bg-neutral-900 p-4">
+              <strong className="text-white">3. Upload hier terug</strong>
+              <p className="mt-2 leading-6 text-neutral-400">
+                Upload via Prijzen uploaden. De buylist wordt direct bijgewerkt.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
     </main>

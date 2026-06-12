@@ -7,6 +7,17 @@ export type PayoutTier = {
   payoutPct: number;
 };
 
+export type BulkCategory = {
+  id: string;
+  enabled: boolean;
+  label: string;
+  description: string;
+  unitCents: number;
+  minQty: number;
+  maxQty: number | null;
+  sortOrder: number;
+};
+
 export type BuylistSettings = {
   generalPayoutPct: number;
   excellentPenaltyPct: number;
@@ -15,7 +26,55 @@ export type BuylistSettings = {
   shippingInstructions: string;
   termsText: string;
   payoutTiers: PayoutTier[];
+  bulkCategories: BulkCategory[];
 };
+
+export const DEFAULT_BULK_CATEGORIES: BulkCategory[] = [
+  {
+    id: "BULK_EX_V",
+    enabled: true,
+    label: "Pokémon ex / V bulk",
+    description:
+      "Goedkope moderne Pokémon ex en V kaarten die niet los in de buylist staan.",
+    unitCents: 10,
+    minQty: 10,
+    maxQty: null,
+    sortOrder: 10,
+  },
+  {
+    id: "BULK_VMAX_VSTAR",
+    enabled: true,
+    label: "Pokémon VMAX / VSTAR bulk",
+    description:
+      "Goedkope VMAX en VSTAR kaarten die niet los in de buylist staan.",
+    unitCents: 25,
+    minQty: 5,
+    maxQty: null,
+    sortOrder: 20,
+  },
+  {
+    id: "BULK_FULL_ART_TRAINER",
+    enabled: false,
+    label: "Cheap full art / trainer bulk",
+    description:
+      "Goedkope full arts en trainers die niet los in de buylist staan.",
+    unitCents: 50,
+    minQty: 1,
+    maxQty: null,
+    sortOrder: 30,
+  },
+  {
+    id: "BULK_IR_TG",
+    enabled: false,
+    label: "Illustration Rare / Trainer Gallery bulk",
+    description:
+      "Goedkope Illustration Rare, Trainer Gallery of vergelijkbare hits.",
+    unitCents: 50,
+    minQty: 1,
+    maxQty: null,
+    sortOrder: 40,
+  },
+];
 
 export const DEFAULT_BUYLIST_SETTINGS: BuylistSettings = {
   generalPayoutPct: 70,
@@ -23,6 +82,7 @@ export const DEFAULT_BUYLIST_SETTINGS: BuylistSettings = {
   minimumBuyPriceCents: 100,
   customerCanShipDirectly: true,
   payoutTiers: [],
+  bulkCategories: DEFAULT_BULK_CATEGORIES,
   shippingInstructions:
     "Buylists onder €400 verzend je zelf, op eigen kosten en risico. Vanaf €400 kan Card House of the East kosteloos een verzendlabel aanbieden. Leg de kaarten op dezelfde volgorde als je buylist en voeg een briefje toe met je naam, e-mailadres en referentie.",
   termsText: `Deze buylist is een voorlopige prijsopgave voor Pokémon kaarten. De definitieve beoordeling en uitbetaling worden vastgesteld nadat Card House of the East de kaarten fysiek heeft ontvangen en gecontroleerd.
@@ -136,6 +196,57 @@ function normalizePayoutTiers(value: unknown): PayoutTier[] {
     .sort((a, b) => a.minCents - b.minCents);
 }
 
+function normalizeBulkCategoryId(value: unknown, fallback: string) {
+  const raw = String(value ?? "").trim().toUpperCase();
+  const clean = raw.replace(/[^A-Z0-9_]/g, "_").replace(/_+/g, "_");
+  const id = clean.startsWith("BULK_") ? clean : `BULK_${clean}`;
+  return id === "BULK_" ? fallback : id;
+}
+
+export function normalizeBulkCategories(value: unknown): BulkCategory[] {
+  if (!Array.isArray(value)) return DEFAULT_BULK_CATEGORIES;
+
+  return value
+    .map((category, index) => {
+      const raw = category as Partial<BulkCategory>;
+      const id = normalizeBulkCategoryId(raw.id, `BULK_${index + 1}`);
+      const unitCents = Number(raw.unitCents);
+      const minQty = Number(raw.minQty);
+      const maxQty =
+        raw.maxQty == null || raw.maxQty === undefined || raw.maxQty === 0
+          ? null
+          : Number(raw.maxQty);
+      const sortOrder = Number(raw.sortOrder ?? index * 10);
+
+      if (!Number.isInteger(unitCents) || unitCents < 0 || unitCents > 100_000) {
+        return null;
+      }
+      if (!Number.isInteger(minQty) || minQty < 1 || minQty > 100_000) {
+        return null;
+      }
+      if (maxQty !== null && (!Number.isInteger(maxQty) || maxQty < minQty)) {
+        return null;
+      }
+
+      return {
+        id,
+        enabled: Boolean(raw.enabled),
+        label:
+          typeof raw.label === "string" && raw.label.trim()
+            ? raw.label.trim()
+            : `Bulk category ${index + 1}`,
+        description:
+          typeof raw.description === "string" ? raw.description.trim() : "",
+        unitCents,
+        minQty,
+        maxQty,
+        sortOrder: Number.isFinite(sortOrder) ? sortOrder : index * 10,
+      };
+    })
+    .filter((category): category is BulkCategory => category !== null)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
 function parsePayoutTiers(value: string | null | undefined): PayoutTier[] {
   if (!value) return DEFAULT_BUYLIST_SETTINGS.payoutTiers;
 
@@ -143,6 +254,16 @@ function parsePayoutTiers(value: string | null | undefined): PayoutTier[] {
     return normalizePayoutTiers(JSON.parse(value));
   } catch {
     return DEFAULT_BUYLIST_SETTINGS.payoutTiers;
+  }
+}
+
+function parseBulkCategories(value: string | null | undefined): BulkCategory[] {
+  if (!value) return DEFAULT_BUYLIST_SETTINGS.bulkCategories;
+
+  try {
+    return normalizeBulkCategories(JSON.parse(value));
+  } catch {
+    return DEFAULT_BUYLIST_SETTINGS.bulkCategories;
   }
 }
 
@@ -162,6 +283,10 @@ export function getPayoutPctForMarketPriceCents(
   }
 
   return settings.generalPayoutPct;
+}
+
+export function getActiveBulkCategories(settings: Pick<BuylistSettings, "bulkCategories">) {
+  return settings.bulkCategories.filter((category) => category.enabled && category.unitCents > 0);
 }
 
 export async function getBuylistSettings(): Promise<BuylistSettings> {
@@ -191,11 +316,13 @@ export async function getBuylistSettings(): Promise<BuylistSettings> {
       DEFAULT_BUYLIST_SETTINGS.shippingInstructions,
     termsText: map.get("termsText") ?? DEFAULT_BUYLIST_SETTINGS.termsText,
     payoutTiers: parsePayoutTiers(map.get("payoutTiersJson")),
+    bulkCategories: parseBulkCategories(map.get("bulkCategoriesJson")),
   };
 }
 
 export async function saveBuylistSettings(input: BuylistSettings) {
   const payoutTiers = normalizePayoutTiers(input.payoutTiers);
+  const bulkCategories = normalizeBulkCategories(input.bulkCategories);
 
   const entries: Array<[string, string]> = [
     ["generalPayoutPct", String(input.generalPayoutPct)],
@@ -205,6 +332,7 @@ export async function saveBuylistSettings(input: BuylistSettings) {
     ["shippingInstructions", input.shippingInstructions],
     ["termsText", input.termsText],
     ["payoutTiersJson", JSON.stringify(payoutTiers)],
+    ["bulkCategoriesJson", JSON.stringify(bulkCategories)],
   ];
 
   await prisma.$transaction(

@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
-
-import { getBuylistSettings } from "@/lib/buylistSettings";
+import {
+  getActiveBulkCategories,
+  getBuylistSettings,
+  type BulkCategory,
+} from "@/lib/buylistSettings";
 import { sendMail } from "@/lib/mail";
 import {
   adminNewSubmissionEmail,
@@ -15,8 +18,6 @@ export const dynamic = "force-dynamic";
 
 const FREE_LABEL_THRESHOLD_CENTS = 40_000;
 const ALLOWED_LANGUAGES = ["English", "Japanese"];
-
-
 
 const SubmitSchema = z.object({
   customer: z.object({
@@ -35,26 +36,72 @@ const SubmitSchema = z.object({
 
     customerMessage: z.string().trim().max(2000).optional().or(z.literal("")),
 
-acceptTerms: z.literal(true),
-confirmEnglishNm: z.literal(true),
-confirmSorted: z.literal(true),
-confirmNoteIncluded: z.literal(true),
-confirmDetailsCorrect: z.literal(true),
+    acceptTerms: z.literal(true),
+    confirmEnglishNm: z.literal(true),
+    confirmSorted: z.literal(true),
+    confirmNoteIncluded: z.literal(true),
+    confirmDetailsCorrect: z.literal(true),
   }),
   items: z
     .array(
       z.object({
         cardKey: z.string().trim().min(1),
-        qty: z.number().int().min(1).max(99),
+        qty: z.number().int().min(1).max(100_000),
       })
     )
     .min(1)
-    .max(500),
+    .max(1000),
 });
 
 function normalizeOptional(value: string | undefined) {
   const clean = (value ?? "").trim();
   return clean ? clean : null;
+}
+
+function isBulkKey(cardKey: string) {
+  return cardKey.toUpperCase().startsWith("BULK_");
+}
+
+type SubmissionLine = {
+  cardKey: string;
+  cardmarketId: number;
+  cardName: string;
+  setName: string | null;
+  setCode: string | null;
+  collectorNumber: string | null;
+  rarity: string | null;
+  language: string;
+  condition: string;
+  finishType: string;
+  qty: number;
+  marketPriceCents: number | null;
+  unitCents: number;
+  lineCents: number;
+  priceSource: string;
+};
+
+function makeBulkLine(category: BulkCategory, qty: number): SubmissionLine | null {
+  if (!category.enabled || category.unitCents <= 0) return null;
+  if (qty < category.minQty) return null;
+  if (category.maxQty != null && qty > category.maxQty) return null;
+
+  return {
+    cardKey: category.id,
+    cardmarketId: 0,
+    cardName: category.label,
+    setName: "Bulk",
+    setCode: "BULK",
+    collectorNumber: null,
+    rarity: "Bulk",
+    language: "Mixed",
+    condition: "NM",
+    finishType: "Bulk",
+    qty,
+    marketPriceCents: category.unitCents,
+    unitCents: category.unitCents,
+    lineCents: category.unitCents * qty,
+    priceSource: "BULK_SETTING",
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -73,6 +120,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const settings = await getBuylistSettings();
     const { customer } = parsed.data;
 
     const qtyByCardKey = new Map<string, number>();
@@ -81,11 +129,13 @@ export async function POST(req: NextRequest) {
       qtyByCardKey.set(item.cardKey, (qtyByCardKey.get(item.cardKey) ?? 0) + item.qty);
     }
 
-    const cardKeys = Array.from(qtyByCardKey.keys());
+    const allCardKeys = Array.from(qtyByCardKey.keys());
+    const normalCardKeys = allCardKeys.filter((cardKey) => !isBulkKey(cardKey));
+    const bulkCardKeys = allCardKeys.filter(isBulkKey);
 
     const cards = await prisma.pokemonCard.findMany({
       where: {
-        cardKey: { in: cardKeys },
+        cardKey: { in: normalCardKeys },
         active: true,
         language: { in: ALLOWED_LANGUAGES },
         condition: "NM",
@@ -95,7 +145,7 @@ export async function POST(req: NextRequest) {
           where: {
             isCurrent: true,
             buyPriceCents: {
-              gte: 100,
+              gte: settings.minimumBuyPriceCents,
             },
           },
           orderBy: {
@@ -106,7 +156,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const lines = cards
+    const normalLines: SubmissionLine[] = cards
       .map((card) => {
         const qty = qtyByCardKey.get(card.cardKey) ?? 0;
         const price = card.prices[0] ?? null;
@@ -134,7 +184,22 @@ export async function POST(req: NextRequest) {
           priceSource: price.source,
         };
       })
-      .filter((line): line is NonNullable<typeof line> => line !== null);
+      .filter((line): line is SubmissionLine => line !== null);
+
+    const bulkCategories = new Map(
+      getActiveBulkCategories(settings).map((category) => [category.id, category])
+    );
+
+    const bulkLines = bulkCardKeys
+      .map((cardKey) => {
+        const category = bulkCategories.get(cardKey);
+        const qty = qtyByCardKey.get(cardKey) ?? 0;
+        if (!category) return null;
+        return makeBulkLine(category, qty);
+      })
+      .filter((line): line is SubmissionLine => line !== null);
+
+    const lines = [...normalLines, ...bulkLines];
 
     if (lines.length === 0) {
       return NextResponse.json(
@@ -169,20 +234,20 @@ export async function POST(req: NextRequest) {
         clientTotalCents: null,
         currency: "EUR",
         customerMessage: normalizeOptional(customer.customerMessage),
-      metaText: JSON.stringify([
-  {
-    ts: new Date().toISOString(),
-    type: "status",
-    to: "SUBMITTED",
-    message: "Submission created",
-  },
-  {
-    ts: new Date().toISOString(),
-    type: "shipping",
-    freeLabelThresholdCents: FREE_LABEL_THRESHOLD_CENTS,
-    shippingLabelEligible: serverTotalCents >= FREE_LABEL_THRESHOLD_CENTS,
-  },
-]),
+        metaText: JSON.stringify([
+          {
+            ts: new Date().toISOString(),
+            type: "status",
+            to: "SUBMITTED",
+            message: "Submission created",
+          },
+          {
+            ts: new Date().toISOString(),
+            type: "shipping",
+            freeLabelThresholdCents: FREE_LABEL_THRESHOLD_CENTS,
+            shippingLabelEligible: serverTotalCents >= FREE_LABEL_THRESHOLD_CENTS,
+          },
+        ]),
         items: {
           create: lines.map((line) => ({
             cardKey: line.cardKey,
@@ -210,8 +275,6 @@ export async function POST(req: NextRequest) {
         items: true,
       },
     });
-
-        const settings = await getBuylistSettings();
 
     try {
       if (submission.email) {

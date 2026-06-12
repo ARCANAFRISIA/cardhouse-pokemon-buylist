@@ -14,23 +14,29 @@ const PayoutTierSchema = z
   .object({
     label: z.string().trim().max(80).optional().default(""),
     minCents: z.number().int().min(0).max(100_000_000),
-    maxCents: z
-      .number()
-      .int()
-      .min(0)
-      .max(100_000_000)
-      .nullable()
-      .optional()
-      .default(null),
+    maxCents: z.number().int().min(0).max(100_000_000).nullable().optional().default(null),
     payoutPct: z.number().int().min(1).max(95),
   })
-  .refine(
-    (tier) => tier.maxCents == null || tier.maxCents > tier.minCents,
-    {
-      message: "maxCents must be greater than minCents",
-      path: ["maxCents"],
-    }
-  );
+  .refine((tier) => tier.maxCents == null || tier.maxCents > tier.minCents, {
+    message: "maxCents must be greater than minCents",
+    path: ["maxCents"],
+  });
+
+const BulkCategorySchema = z
+  .object({
+    id: z.string().trim().min(3).max(80),
+    enabled: z.boolean(),
+    label: z.string().trim().min(2).max(120),
+    description: z.string().trim().max(500).optional().default(""),
+    unitCents: z.number().int().min(0).max(100_000),
+    minQty: z.number().int().min(1).max(100_000),
+    maxQty: z.number().int().min(1).max(100_000).nullable().optional().default(null),
+    sortOrder: z.number().int().min(-100_000).max(100_000).optional().default(0),
+  })
+  .refine((category) => category.maxQty == null || category.maxQty >= category.minQty, {
+    message: "maxQty must be greater than or equal to minQty",
+    path: ["maxQty"],
+  });
 
 const SettingsSchema = z.object({
   generalPayoutPct: z.number().int().min(1).max(95),
@@ -39,11 +45,8 @@ const SettingsSchema = z.object({
   customerCanShipDirectly: z.boolean(),
   shippingInstructions: z.string().trim().min(10).max(5000),
   termsText: z.string().trim().min(10).max(10000),
-  payoutTiers: z
-    .array(PayoutTierSchema)
-    .max(30)
-    .optional()
-    .default(DEFAULT_BUYLIST_SETTINGS.payoutTiers),
+  payoutTiers: z.array(PayoutTierSchema).max(30).optional().default(DEFAULT_BUYLIST_SETTINGS.payoutTiers),
+  bulkCategories: z.array(BulkCategorySchema).max(30).optional().default(DEFAULT_BUYLIST_SETTINGS.bulkCategories),
 });
 
 export async function GET() {
