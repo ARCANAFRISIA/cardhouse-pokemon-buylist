@@ -58,9 +58,7 @@ function CardImage(props: {
   size?: "sm" | "md";
 }) {
   const sizeClass =
-    props.size === "sm"
-      ? "h-14 w-10"
-      : "h-36 w-[104px] sm:h-32 sm:w-24";
+    props.size === "sm" ? "h-14 w-10" : "h-28 w-20 sm:h-32 sm:w-24";
 
   if (!props.item.imageUrl) {
     return (
@@ -438,12 +436,12 @@ export default function BuyPage() {
                     key={item.cardKey}
                     className="rounded-[1.75rem] border border-neutral-200 bg-white p-4 shadow-sm sm:grid sm:grid-cols-[auto_1fr_auto] sm:gap-4"
                   >
-                    <div className="grid grid-cols-[112px_1fr] gap-4 sm:contents">
+                    <div className="grid grid-cols-[88px_1fr] gap-4 sm:contents">
                       <CardImage item={item} />
 
                       <div className="min-w-0 sm:col-start-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-[1.7rem] font-black leading-tight sm:text-lg sm:font-bold">
+                          <h3 className="text-2xl font-black leading-tight sm:text-lg sm:font-bold">
                             {item.name}
                           </h3>
                           <span className="rounded-full bg-green-50 px-3 py-1 text-sm font-black text-green-700 sm:text-xs">
@@ -456,14 +454,14 @@ export default function BuyPage() {
                           )}
                         </div>
 
-                        <p className="mt-3 text-lg leading-7 text-neutral-600 sm:mt-1 sm:text-sm sm:leading-5">
+                        <p className="mt-2 text-base leading-6 text-neutral-600 sm:mt-1 sm:text-sm sm:leading-5">
                           {item.setName ?? "Onbekende set"}
                           {item.setCode ? ` • ${item.setCode}` : ""}
                           {item.collectorNumber ? ` • #${item.collectorNumber}` : ""}
                           {item.rarity ? ` • ${item.rarity}` : ""}
                         </p>
 
-                        <p className="mt-3 text-base text-neutral-500 sm:mt-2 sm:text-xs">
+                        <p className="mt-2 text-sm text-neutral-500 sm:mt-2 sm:text-xs">
                           Engels • {item.condition} • {item.finishType} • CM{" "}
                           {item.cardmarketId}
                         </p>
@@ -615,7 +613,7 @@ export default function BuyPage() {
           type="button"
           onClick={scrollToTop}
           aria-label="Terug naar boven"
-          className="fixed bottom-32 right-4 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-lg font-black leading-none text-blue-600 shadow-md lg:bottom-8"
+          className="fixed bottom-32 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-neutral-200 bg-white text-xl font-black leading-none text-neutral-950 shadow-md lg:bottom-8"
         >
           ↑
         </button>
@@ -625,9 +623,14 @@ export default function BuyPage() {
         <div className="fixed inset-x-0 bottom-0 z-50 lg:hidden">
           {showMobileSummary && (
             <div className="mx-3 mb-0 max-h-[48vh] overflow-hidden rounded-t-[2rem] border border-neutral-200 bg-white shadow-[0_-14px_35px_rgba(0,0,0,0.18)]">
-              <div className="flex justify-center pt-3">
-                <div className="h-1.5 w-16 rounded-full bg-neutral-300" />
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowMobileSummary(false)}
+                aria-label="Lijst inklappen"
+                className="flex w-full justify-center pt-3"
+              >
+                <span className="h-1.5 w-14 rounded-full bg-neutral-300" />
+              </button>
 
               <div className="flex items-center justify-between px-4 py-3">
                 <strong className="text-lg">Jouw lijst</strong>
@@ -697,10 +700,11 @@ export default function BuyPage() {
               type="button"
               onClick={() => setShowMobileSummary((current) => !current)}
               aria-label={showMobileSummary ? "Lijst inklappen" : "Lijst openen"}
-              className="mx-auto mb-2 flex h-7 w-24 items-center justify-center rounded-full bg-neutral-100"
+              aria-expanded={showMobileSummary}
+              className="mx-auto mb-2 flex h-6 w-28 items-center justify-center rounded-full bg-neutral-100"
             >
-              <span className="block h-1.5 w-14 rounded-full bg-neutral-400" />
-              <span className="ml-2 text-sm font-black text-neutral-600">
+              <span className="h-1.5 w-14 rounded-full bg-neutral-300" />
+              <span className="ml-3 text-base font-black leading-none text-neutral-700">
                 {showMobileSummary ? "⌄" : "⌃"}
               </span>
             </button>
