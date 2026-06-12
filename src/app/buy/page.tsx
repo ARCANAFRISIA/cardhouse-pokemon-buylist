@@ -465,9 +465,14 @@ export default function BuyPage() {
                       <button
                         type="button"
                         onClick={() => addToCart(item)}
-                        className="rounded-2xl bg-red-600 px-6 py-4 text-xl font-black text-white hover:bg-red-700 sm:text-base sm:font-semibold"
+                        className="relative rounded-2xl bg-red-600 px-6 py-4 text-xl font-black text-white hover:bg-red-700 sm:text-base sm:font-semibold"
                       >
-                        {isAdded ? "Toegevoegd" : "Add"}
+                        {isAdded && (
+                          <span className="pointer-events-none absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-green-600 px-3 py-1 text-xs font-black text-white shadow-md">
+                            Toegevoegd
+                          </span>
+                        )}
+                        Add
                       </button>
                     </div>
                   </article>
@@ -600,7 +605,7 @@ export default function BuyPage() {
           type="button"
           onClick={scrollToTop}
           aria-label="Terug naar boven"
-          className="fixed bottom-36 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-neutral-200 bg-white text-3xl font-black text-neutral-950 shadow-lg lg:bottom-8"
+          className="fixed bottom-32 right-4 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 bg-white text-2xl font-black leading-none text-neutral-950 shadow-md lg:bottom-8"
         >
           ↑
         </button>
@@ -678,11 +683,17 @@ export default function BuyPage() {
               type="button"
               onClick={() => setShowMobileSummary((current) => !current)}
               className="min-w-0 flex-1 text-left"
+              aria-expanded={showMobileSummary}
             >
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-neutral-500">
-                Jouw lijst {showMobileSummary ? "⌄" : "⌃"}
-              </p>
-              <strong className="block truncate text-lg">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-neutral-500">
+                  Jouw lijst
+                </p>
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-neutral-100 text-xl font-black leading-none text-neutral-700">
+                  {showMobileSummary ? "⌄" : "⌃"}
+                </span>
+              </div>
+              <strong className="mt-1 block truncate text-lg">
                 {cartCount} kaart{cartCount === 1 ? "" : "en"} · {euro(cartTotal)}
               </strong>
             </button>
