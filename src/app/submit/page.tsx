@@ -398,6 +398,25 @@ const allChecksAccepted =
   verzendlabel aanbieden.
 </p>
 
+<div className="mt-4 rounded-2xl border border-red-100 bg-white p-4 text-sm leading-6">
+  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <strong className="text-neutral-950">Kaarten opsturen?</strong>
+      <p className="mt-1 text-neutral-600">
+        Bekijk eerst kort hoe je Pokémon kaarten veilig verpakt. Dit voorkomt
+        schade en versnelt de controle.
+      </p>
+    </div>
+
+    <Link
+      href="/packing-guide"
+      className="inline-flex shrink-0 items-center justify-center rounded-full bg-neutral-950 px-4 py-2 text-sm font-bold text-white hover:bg-neutral-800"
+    >
+      Bekijk verpakkingsguide
+    </Link>
+  </div>
+</div>
+
   <div className="mt-4 space-y-3 text-sm">
     <label className="flex gap-3 rounded-xl bg-white p-3">
       <input
