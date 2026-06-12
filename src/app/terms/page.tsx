@@ -41,12 +41,7 @@ export default async function TermsPage() {
           <div className="mt-6 whitespace-pre-wrap text-sm leading-7 text-neutral-700">
             {settings.termsText}
           </div>
-        </div>
-      </section>
-    </main>
-  );
-}
-<div className="mt-8 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700">
+          <div className="mt-8 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700">
   <strong className="text-neutral-950">Verpakking en verzending</strong>
   <p className="mt-2">
     Bekijk ook de verpakkingsguide voordat je je kaarten opstuurt.
@@ -58,3 +53,8 @@ export default async function TermsPage() {
     Bekijk verpakkingsguide
   </Link>
 </div>
+        </div>
+      </section>
+    </main>
+  );
+}
