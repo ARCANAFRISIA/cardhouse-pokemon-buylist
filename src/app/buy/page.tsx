@@ -53,8 +53,14 @@ function lineTotal(item: CartItem) {
   return (item.buyPrice ?? 0) * item.qty;
 }
 
-function CardImage(props: { item: Pick<SearchItem, "name" | "imageUrl">; size?: "sm" | "md" }) {
-  const sizeClass = props.size === "sm" ? "h-14 w-10" : "h-28 w-20 sm:h-32 sm:w-24";
+function CardImage(props: {
+  item: Pick<SearchItem, "name" | "imageUrl">;
+  size?: "sm" | "md";
+}) {
+  const sizeClass =
+    props.size === "sm"
+      ? "h-14 w-10"
+      : "h-36 w-[104px] sm:h-32 sm:w-24";
 
   if (!props.item.imageUrl) {
     return (
@@ -78,8 +84,8 @@ function CardImage(props: { item: Pick<SearchItem, "name" | "imageUrl">; size?: 
 
 function PriceBox(props: { value: number | null }) {
   return (
-    <div className="min-w-[140px] rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-left">
-      <p className="text-xs font-black uppercase tracking-[0.14em] text-neutral-500">
+    <div className="rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-left shadow-sm">
+      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-neutral-500">
         Wij betalen
       </p>
       <p className="mt-1 text-2xl font-black text-neutral-950">{euro(props.value)}</p>
@@ -99,9 +105,9 @@ export default function BuyPage() {
   const [loading, setLoading] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartLoaded, setCartLoaded] = useState(false);
-  const [addedKey, setAddedKey] = useState<string | null>(null);
   const [showMobileSummary, setShowMobileSummary] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [pulseKey, setPulseKey] = useState<string | null>(null);
 
   const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
   const cartTotal = cart.reduce((sum, item) => sum + lineTotal(item), 0);
@@ -204,8 +210,8 @@ export default function BuyPage() {
       return [...current, { ...item, qty: 1 }];
     });
 
-    setAddedKey(item.cardKey);
-    window.setTimeout(() => setAddedKey(null), 1200);
+    setPulseKey(item.cardKey);
+    window.setTimeout(() => setPulseKey(null), 250);
   }
 
   function changeQty(cardKey: string, delta: number) {
@@ -273,7 +279,8 @@ export default function BuyPage() {
                 Verkoop je Pokémon kaarten
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-7 text-neutral-600 sm:text-lg">
-                Zoek je kaart, voeg hem toe aan je lijst en verkoop snel aan Card House of the East.
+                Zoek je kaart, voeg hem toe aan je lijst en verkoop snel aan Card
+                House of the East.
               </p>
             </div>
 
@@ -297,7 +304,8 @@ export default function BuyPage() {
             <div>
               <strong>Goedkope EX, V, VMAX of VSTAR bulk?</strong>
               <p className="mt-1 text-sm leading-6 text-neutral-600">
-                Gebruik de aparte bulkpagina voor kaarten die niet los in de buylist staan.
+                Gebruik de aparte bulkpagina voor kaarten die niet los in de buylist
+                staan.
               </p>
             </div>
 
@@ -414,26 +422,28 @@ export default function BuyPage() {
         <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_360px]">
           <section>
             <div className="flex items-center justify-between gap-4">
-              <h2 className="text-3xl font-black sm:text-xl sm:font-bold">{searchLabel}</h2>
+              <h2 className="text-3xl font-black sm:text-xl sm:font-bold">
+                {searchLabel}
+              </h2>
             </div>
 
             <div className="mt-4 grid gap-4">
               {items.map((item) => {
                 const inCartQty =
                   cart.find((cartItem) => cartItem.cardKey === item.cardKey)?.qty ?? 0;
-                const isAdded = addedKey === item.cardKey;
+                const isPulsing = pulseKey === item.cardKey;
 
                 return (
                   <article
                     key={item.cardKey}
                     className="rounded-[1.75rem] border border-neutral-200 bg-white p-4 shadow-sm sm:grid sm:grid-cols-[auto_1fr_auto] sm:gap-4"
                   >
-                    <div className="grid grid-cols-[140px_1fr] gap-4 sm:contents">
+                    <div className="grid grid-cols-[112px_1fr] gap-4 sm:contents">
                       <CardImage item={item} />
 
                       <div className="min-w-0 sm:col-start-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-2xl font-black leading-tight sm:text-lg sm:font-bold">
+                          <h3 className="text-[1.7rem] font-black leading-tight sm:text-lg sm:font-bold">
                             {item.name}
                           </h3>
                           <span className="rounded-full bg-green-50 px-3 py-1 text-sm font-black text-green-700 sm:text-xs">
@@ -454,7 +464,8 @@ export default function BuyPage() {
                         </p>
 
                         <p className="mt-3 text-base text-neutral-500 sm:mt-2 sm:text-xs">
-                          Engels • {item.condition} • {item.finishType} • CM {item.cardmarketId}
+                          Engels • {item.condition} • {item.finishType} • CM{" "}
+                          {item.cardmarketId}
                         </p>
                       </div>
                     </div>
@@ -465,14 +476,12 @@ export default function BuyPage() {
                       <button
                         type="button"
                         onClick={() => addToCart(item)}
-                        className="relative rounded-2xl bg-red-600 px-6 py-4 text-xl font-black text-white hover:bg-red-700 sm:text-base sm:font-semibold"
+                        className={[
+                          "rounded-2xl bg-red-600 px-6 py-4 text-xl font-black text-white transition-transform hover:bg-red-700 sm:text-base sm:font-semibold",
+                          isPulsing ? "scale-[0.97]" : "scale-100",
+                        ].join(" ")}
                       >
-                        {isAdded && (
-                          <span className="pointer-events-none absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-green-600 px-3 py-1 text-xs font-black text-white shadow-md">
-                            Toegevoegd
-                          </span>
-                        )}
-                        Add
+                        Toevoegen
                       </button>
                     </div>
                   </article>
@@ -482,7 +491,8 @@ export default function BuyPage() {
 
             {!loading && items.length === 0 && (
               <div className="mt-6 rounded-2xl border border-neutral-200 bg-white p-8 text-center text-neutral-600">
-                Geen kaarten gevonden. Probeer een andere zoekterm of check de bulkpagina.
+                Geen kaarten gevonden. Probeer een andere zoekterm of check de
+                bulkpagina.
               </div>
             )}
           </section>
@@ -605,17 +615,21 @@ export default function BuyPage() {
           type="button"
           onClick={scrollToTop}
           aria-label="Terug naar boven"
-          className="fixed bottom-32 right-4 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 bg-white text-2xl font-black leading-none text-neutral-950 shadow-md lg:bottom-8"
+          className="fixed bottom-32 right-4 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-lg font-black leading-none text-blue-600 shadow-md lg:bottom-8"
         >
           ↑
         </button>
       )}
 
       {cart.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-200 bg-white shadow-[0_-10px_30px_rgba(0,0,0,0.12)] lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-50 lg:hidden">
           {showMobileSummary && (
-            <div className="max-h-[45vh] overflow-auto border-b border-neutral-200 bg-white px-4 py-4">
-              <div className="mb-3 flex items-center justify-between">
+            <div className="mx-3 mb-0 max-h-[48vh] overflow-hidden rounded-t-[2rem] border border-neutral-200 bg-white shadow-[0_-14px_35px_rgba(0,0,0,0.18)]">
+              <div className="flex justify-center pt-3">
+                <div className="h-1.5 w-16 rounded-full bg-neutral-300" />
+              </div>
+
+              <div className="flex items-center justify-between px-4 py-3">
                 <strong className="text-lg">Jouw lijst</strong>
                 <button
                   type="button"
@@ -626,7 +640,7 @@ export default function BuyPage() {
                 </button>
               </div>
 
-              <div className="space-y-3">
+              <div className="max-h-[34vh] space-y-3 overflow-auto px-4 pb-4">
                 {cart.map((item) => (
                   <div
                     key={item.cardKey}
@@ -678,32 +692,41 @@ export default function BuyPage() {
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-3 px-4 py-4">
+          <div className="border-t border-neutral-200 bg-white px-4 py-4 shadow-[0_-10px_30px_rgba(0,0,0,0.12)]">
             <button
               type="button"
               onClick={() => setShowMobileSummary((current) => !current)}
-              className="min-w-0 flex-1 text-left"
-              aria-expanded={showMobileSummary}
+              aria-label={showMobileSummary ? "Lijst inklappen" : "Lijst openen"}
+              className="mx-auto mb-2 flex h-7 w-24 items-center justify-center rounded-full bg-neutral-100"
             >
-              <div className="flex items-center gap-2">
+              <span className="block h-1.5 w-14 rounded-full bg-neutral-400" />
+              <span className="ml-2 text-sm font-black text-neutral-600">
+                {showMobileSummary ? "⌄" : "⌃"}
+              </span>
+            </button>
+
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setShowMobileSummary((current) => !current)}
+                className="min-w-0 flex-1 text-left"
+                aria-expanded={showMobileSummary}
+              >
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-neutral-500">
                   Jouw lijst
                 </p>
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-neutral-100 text-xl font-black leading-none text-neutral-700">
-                  {showMobileSummary ? "⌄" : "⌃"}
-                </span>
-              </div>
-              <strong className="mt-1 block truncate text-lg">
-                {cartCount} kaart{cartCount === 1 ? "" : "en"} · {euro(cartTotal)}
-              </strong>
-            </button>
+                <strong className="mt-1 block truncate text-lg">
+                  {cartCount} kaart{cartCount === 1 ? "" : "en"} · {euro(cartTotal)}
+                </strong>
+              </button>
 
-            <Link
-              href="/submit"
-              className="shrink-0 rounded-2xl bg-red-600 px-7 py-4 text-lg font-black text-white"
-            >
-              Indienen
-            </Link>
+              <Link
+                href="/submit"
+                className="shrink-0 rounded-2xl bg-red-600 px-7 py-4 text-lg font-black text-white"
+              >
+                Indienen
+              </Link>
+            </div>
           </div>
         </div>
       )}
