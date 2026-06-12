@@ -12,9 +12,16 @@ export const dynamic = "force-dynamic";
 
 const PayoutTierSchema = z
   .object({
-    label: z.string().trim().max(80).optional().or(z.literal("")),
+    label: z.string().trim().max(80).optional().default(""),
     minCents: z.number().int().min(0).max(100_000_000),
-    maxCents: z.number().int().min(0).max(100_000_000).nullable().optional(),
+    maxCents: z
+      .number()
+      .int()
+      .min(0)
+      .max(100_000_000)
+      .nullable()
+      .optional()
+      .default(null),
     payoutPct: z.number().int().min(1).max(95),
   })
   .refine(
