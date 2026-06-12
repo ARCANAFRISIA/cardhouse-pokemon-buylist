@@ -28,6 +28,35 @@ type ItemChange = {
   note?: string | null;
 };
 
+const FREE_LABEL_THRESHOLD_CENTS = 40_000;
+
+function publicUrl(path: string) {
+  const base =
+    process.env.BUYLIST_PUBLIC_URL ??
+    process.env.NEXT_PUBLIC_BUYLIST_PUBLIC_URL ??
+    "https://inkoop.card-house.nl";
+
+  return `${base.replace(/\/$/, "")}${path}`;
+}
+
+function shippingLabelText(totalCents: number) {
+  if (totalCents >= FREE_LABEL_THRESHOLD_CENTS) {
+    return `
+      <p>
+        Omdat je buylist €400 of hoger is, kan Card House of the East kosteloos
+        een verzendlabel aanbieden. Je ontvangt hierover verdere instructies per e-mail.
+      </p>
+    `;
+  }
+
+  return `
+    <p>
+      Deze buylist is lager dan €400. Je verzendt de kaarten zelf, op eigen kosten
+      en risico. Gebruik bij voorkeur verzending met track & trace.
+    </p>
+  `;
+}
+
 function shortRef(id: string) {
   return id.slice(0, 8).toUpperCase();
 }
@@ -125,34 +154,50 @@ export function customerSubmissionConfirmationEmail(
 ) {
   const ref = shortRef(submission.id);
   const totalCents = submission.serverTotalCents ?? 0;
+  const packingGuideUrl = publicUrl("/packing-guide");
 
   const html = shell(
     `Je Pokémon buylist is ingediend – ${ref}`,
     `
-      <p>Bedankt voor je inzending. We hebben je buylist ontvangen met referentie <strong>${esc(ref)}</strong>.</p>
+      <p>
+        Bedankt voor je inzending. We hebben je buylist ontvangen met referentie
+        <strong>${esc(ref)}</strong>.
+      </p>
 
       <p>
         Voorlopig totaal: <strong>${euro(totalCents)}</strong><br/>
-        Aantal kaarten: <strong>${submission.items.reduce((sum, item) => sum + item.qty, 0)}</strong>
+        Aantal kaarten:
+        <strong>${submission.items.reduce((sum, item) => sum + item.qty, 0)}</strong>
       </p>
 
-      <p><strong>Belangrijk voor verzending</strong></p>
-      <p>${esc(settings.shippingInstructions)}</p>
+      <p><strong>Verzending</strong></p>
+      ${shippingLabelText(totalCents)}
+
+      <p><strong>Voorbereiden en verpakken</strong></p>
+      <ul>
+        <li>Leg de kaarten op dezelfde volgorde als de buylist.</li>
+        <li>Gebruik sleeves en stevige bescherming, zodat kaarten niet kunnen schuiven of buigen.</li>
+        <li>Gebruik zo min mogelijk tape direct rondom kaarten of sleeves.</li>
+        <li>Voeg een briefje toe met naam, e-mailadres en referentie <strong>${esc(ref)}</strong>.</li>
+      </ul>
 
       <p>
-        Controleer nog even dat:
+        Bekijk de verpakkingsguide:
+        <a href="${esc(packingGuideUrl)}">${esc(packingGuideUrl)}</a>
       </p>
+
+      <p><strong>Controleer nog even dat:</strong></p>
       <ul>
-        <li>de kaarten English zijn;</li>
+        <li>de kaarten Engels of Japans zijn, voor zover actief in de buylist aangeboden;</li>
         <li>de kaarten Near Mint zijn, tenzij anders afgesproken;</li>
-        <li>de kaarten op dezelfde volgorde liggen als de buylist;</li>
-        <li>er een briefje bij zit met naam, e-mailadres en referentie <strong>${esc(ref)}</strong>.</li>
+        <li>je contact-, adres- en uitbetalingsgegevens correct zijn ingevuld.</li>
       </ul>
 
       ${itemsTable(submission.items, totalCents)}
 
       <p style="font-size:12px;color:#666;margin-top:16px">
-        Dit is een voorlopige prijsopgave. De definitieve uitbetaling wordt vastgesteld nadat Card House of the East de kaarten heeft gecontroleerd.
+        Dit is een voorlopige prijsopgave. De definitieve uitbetaling wordt
+        vastgesteld nadat Card House of the East de kaarten heeft gecontroleerd.
       </p>
     `
   );
@@ -174,13 +219,18 @@ export function adminNewSubmissionEmail(submission: SubmissionWithItems) {
         Er is een nieuwe Pokémon buylist ingediend.
       </p>
 
-      <p>
-        <strong>Referentie:</strong> ${esc(ref)}<br/>
-        <strong>Klant:</strong> ${esc(submission.fullName ?? "—")}<br/>
-        <strong>E-mail:</strong> ${esc(submission.email ?? "—")}<br/>
-        <strong>Telefoon:</strong> ${esc(submission.phone ?? "—")}<br/>
-        <strong>Totaal:</strong> ${euro(totalCents)}
-      </p>
+<p>
+  <strong>Referentie:</strong> ${esc(ref)}<br/>
+  <strong>Klant:</strong> ${esc(submission.fullName ?? "—")}<br/>
+  <strong>E-mail:</strong> ${esc(submission.email ?? "—")}<br/>
+  <strong>Telefoon:</strong> ${esc(submission.phone ?? "—")}<br/>
+  <strong>Totaal:</strong> ${euro(totalCents)}<br/>
+  <strong>Gratis label:</strong> ${
+    totalCents >= FREE_LABEL_THRESHOLD_CENTS
+      ? "Ja, buylist is €400 of hoger"
+      : "Nee, klant verzendt zelf"
+  }
+</p>
 
       <p><strong>Adres</strong><br/>${addressBlock(submission)}</p>
 

@@ -36,6 +36,8 @@ function euroCents(cents: number | undefined) {
   return euro(cents / 100);
 }
 
+const FREE_LABEL_THRESHOLD_CENTS = 40_000;
+
 export default function SubmitPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -59,6 +61,7 @@ export default function SubmitPage() {
 const [confirmEnglishNm, setConfirmEnglishNm] = useState(false);
 const [confirmSorted, setConfirmSorted] = useState(false);
 const [confirmNoteIncluded, setConfirmNoteIncluded] = useState(false);
+const [confirmDetailsCorrect, setConfirmDetailsCorrect] = useState(false);
 
   useEffect(() => {
     try {
@@ -84,8 +87,12 @@ const [confirmNoteIncluded, setConfirmNoteIncluded] = useState(false);
     [cart]
   );
 
-  const allChecksAccepted =
-  acceptTerms && confirmEnglishNm && confirmSorted && confirmNoteIncluded;
+const allChecksAccepted =
+  acceptTerms &&
+  confirmEnglishNm &&
+  confirmSorted &&
+  confirmNoteIncluded &&
+  confirmDetailsCorrect;
 
   async function submit() {
     if (cart.length === 0 || busy) return;
@@ -116,6 +123,7 @@ const [confirmNoteIncluded, setConfirmNoteIncluded] = useState(false);
   confirmEnglishNm,
   confirmSorted,
   confirmNoteIncluded,
+  confirmDetailsCorrect,
 },
           items: cart.map((item) => ({
             cardKey: item.cardKey,
@@ -150,6 +158,7 @@ const [confirmNoteIncluded, setConfirmNoteIncluded] = useState(false);
   }
 
   if (result?.ok) {
+    const freeLabelEligible = (result.totalCents ?? 0) >= FREE_LABEL_THRESHOLD_CENTS;
     return (
       <main className="min-h-screen bg-neutral-50 text-neutral-950">
         <section className="mx-auto max-w-3xl px-6 py-16">
@@ -160,10 +169,10 @@ const [confirmNoteIncluded, setConfirmNoteIncluded] = useState(false);
 
             <h1 className="mt-4 text-4xl font-black">Bedankt!</h1>
 
-            <p className="mt-4 text-neutral-600">
-  Je buylist is ontvangen. Je kunt je kaarten nu opsturen naar Card House.
-  Sorteer de kaarten op dezelfde volgorde als je buylist en voeg een briefje
-  toe met je naam, e-mailadres en referentie.
+<p className="mt-4 text-neutral-600">
+  Je buylist is ontvangen door Card House of the East. Sorteer de kaarten op
+  dezelfde volgorde als je buylist en voeg een briefje toe met je naam,
+  e-mailadres en referentie.
 </p>
 
             <div className="mt-6 rounded-2xl bg-neutral-50 p-5 text-sm">
@@ -187,16 +196,33 @@ const [confirmNoteIncluded, setConfirmNoteIncluded] = useState(false);
     <div>
       <strong className="text-neutral-950">Verzendinstructies</strong>
 
-      <ul className="mt-2 list-disc space-y-1 pl-5">
+      {freeLabelEligible ? (
+        <p className="mt-2">
+          Je buylist is €400 of hoger. Card House of the East kan hiervoor
+          kosteloos een verzendlabel aanbieden. Je ontvangt hierover verdere
+          instructies per e-mail.
+        </p>
+      ) : (
+        <p className="mt-2">
+          Je buylist is lager dan €400. Je verzendt de kaarten zelf, op eigen
+          kosten en risico. Gebruik bij voorkeur verzending met track & trace.
+        </p>
+      )}
+
+      <ul className="mt-3 list-disc space-y-1 pl-5">
         <li>Leg je kaarten op dezelfde volgorde als deze buylist.</li>
         <li>
           Voeg een briefje toe met je naam, e-mailadres en referentie:{" "}
           <strong>{result.submissionId?.slice(0, 8)}</strong>
         </li>
-        <li>Verpak je kaarten goed, zodat ze niet beschadigen tijdens verzending.</li>
+        <li>Gebruik sleeves en stevige bescherming, zodat kaarten niet kunnen schuiven of buigen.</li>
+        <li>Gebruik zo min mogelijk tape direct rondom kaarten of sleeves.</li>
         <li>
-          De definitieve uitbetaling wordt vastgesteld nadat Card House de kaarten
-          heeft gecontroleerd.
+          Bekijk ook de{" "}
+          <Link href="/packing-guide" className="font-semibold text-red-600 underline">
+            verpakkingsguide
+          </Link>
+          .
         </li>
       </ul>
     </div>
@@ -366,10 +392,11 @@ const [confirmNoteIncluded, setConfirmNoteIncluded] = useState(false);
  <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
   <h2 className="text-lg font-black">Voordat je indient</h2>
 
-  <p className="mt-2 text-sm leading-6 text-neutral-600">
-    Na het indienen kun je je kaarten direct opsturen naar Card House.
-    Volg onderstaande stappen, zodat je buylist snel gecontroleerd kan worden.
-  </p>
+<p className="mt-2 text-sm leading-6 text-neutral-600">
+  Controleer je gegevens en bereid je kaarten goed voor. Buylists onder €400
+  verzend je zelf. Vanaf €400 kan Card House of the East kosteloos een
+  verzendlabel aanbieden.
+</p>
 
   <div className="mt-4 space-y-3 text-sm">
     <label className="flex gap-3 rounded-xl bg-white p-3">
@@ -396,9 +423,10 @@ en begrijp dat de definitieve uitbetaling wordt vastgesteld na controle.
         className="mt-1"
       />
       <span>
-        Ik bevestig dat de ingestuurde kaarten Engels en Near Mint zijn.
-        Als een kaart niet Near Mint is, mag Card House de uitbetaling aanpassen.
-      </span>
+  Ik bevestig dat de ingestuurde kaarten Engels of Japans zijn en Near Mint zijn.
+  Als een kaart niet Near Mint is, mag Card House of the East de uitbetaling
+  aanpassen of de kaart weigeren.
+</span>
     </label>
 
     <label className="flex gap-3 rounded-xl bg-white p-3">
@@ -420,10 +448,23 @@ en begrijp dat de definitieve uitbetaling wordt vastgesteld na controle.
         onChange={(e) => setConfirmNoteIncluded(e.target.checked)}
         className="mt-1"
       />
-      <span>
-        Ik voeg een briefje toe met mijn naam en e-mailadres in het pakket.
-      </span>
+    <span>
+  Ik voeg een briefje toe met mijn naam, e-mailadres en buylistreferentie in het pakket.
+</span>
     </label>
+    <label className="flex gap-3 rounded-xl bg-white p-3">
+  <input
+    type="checkbox"
+    checked={confirmDetailsCorrect}
+    onChange={(e) => setConfirmDetailsCorrect(e.target.checked)}
+    className="mt-1"
+  />
+  <span>
+    Ik heb mijn contact-, adres- en uitbetalingsgegevens gecontroleerd en begrijp
+    dat Card House of the East niet verantwoordelijk is voor vertraging of
+    foutieve uitbetaling door verkeerd ingevulde gegevens.
+  </span>
+</label>
   </div>
 </div>
 

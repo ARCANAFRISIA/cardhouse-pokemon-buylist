@@ -46,3 +46,15 @@ export default async function TermsPage() {
     </main>
   );
 }
+<div className="mt-8 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700">
+  <strong className="text-neutral-950">Verpakking en verzending</strong>
+  <p className="mt-2">
+    Bekijk ook de verpakkingsguide voordat je je kaarten opstuurt.
+  </p>
+  <Link
+    href="/packing-guide"
+    className="mt-3 inline-flex rounded-full bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700"
+  >
+    Bekijk verpakkingsguide
+  </Link>
+</div>

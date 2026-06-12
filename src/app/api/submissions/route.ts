@@ -13,6 +13,9 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const FREE_LABEL_THRESHOLD_CENTS = 40_000;
+const ALLOWED_LANGUAGES = ["English", "Japanese"];
+
 
 
 const SubmitSchema = z.object({
@@ -36,6 +39,7 @@ acceptTerms: z.literal(true),
 confirmEnglishNm: z.literal(true),
 confirmSorted: z.literal(true),
 confirmNoteIncluded: z.literal(true),
+confirmDetailsCorrect: z.literal(true),
   }),
   items: z
     .array(
@@ -83,7 +87,7 @@ export async function POST(req: NextRequest) {
       where: {
         cardKey: { in: cardKeys },
         active: true,
-        language: "English",
+        language: { in: ALLOWED_LANGUAGES },
         condition: "NM",
       },
       include: {
@@ -165,14 +169,20 @@ export async function POST(req: NextRequest) {
         clientTotalCents: null,
         currency: "EUR",
         customerMessage: normalizeOptional(customer.customerMessage),
-        metaText: JSON.stringify([
-          {
-            ts: new Date().toISOString(),
-            type: "status",
-            to: "SUBMITTED",
-            message: "Submission created",
-          },
-        ]),
+      metaText: JSON.stringify([
+  {
+    ts: new Date().toISOString(),
+    type: "status",
+    to: "SUBMITTED",
+    message: "Submission created",
+  },
+  {
+    ts: new Date().toISOString(),
+    type: "shipping",
+    freeLabelThresholdCents: FREE_LABEL_THRESHOLD_CENTS,
+    shippingLabelEligible: serverTotalCents >= FREE_LABEL_THRESHOLD_CENTS,
+  },
+]),
         items: {
           create: lines.map((line) => ({
             cardKey: line.cardKey,
