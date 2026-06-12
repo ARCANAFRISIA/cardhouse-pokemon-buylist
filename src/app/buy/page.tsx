@@ -26,18 +26,11 @@ type CartItem = SearchItem & {
   qty: number;
 };
 
-type FilterSet = {
-  setCode: string;
-  label: string;
-};
-
 type SearchResponse = {
-  ok: boolean;
+  ok?: boolean;
   items?: SearchItem[];
-  filters?: {
-    sets?: FilterSet[];
-    rarities?: string[];
-  };
+  setOptions?: Array<{ setCode: string | null; setName: string | null }>;
+  rarityOptions?: string[];
 };
 
 function euro(value: number | null) {
@@ -53,8 +46,11 @@ function lineTotal(item: CartItem) {
   return (item.buyPrice ?? 0) * item.qty;
 }
 
-function CardImage(props: { item: Pick<SearchItem, "name" | "imageUrl">; size?: "sm" | "md" }) {
-  const sizeClass = props.size === "sm" ? "h-14 w-10" : "h-24 w-[4.25rem] sm:h-28 sm:w-20";
+function CardImage(props: {
+  item: Pick<SearchItem, "name" | "imageUrl">;
+  size?: "sm" | "md";
+}) {
+  const sizeClass = props.size === "sm" ? "h-14 w-10" : "h-24 w-[68px] sm:h-28 sm:w-20";
 
   if (!props.item.imageUrl) {
     return (
@@ -78,20 +74,23 @@ function CardImage(props: { item: Pick<SearchItem, "name" | "imageUrl">; size?: 
 
 export default function BuyPage() {
   const [q, setQ] = useState("");
-  const [setCode, setSetCode] = useState("all");
-  const [rarity, setRarity] = useState("all");
-  const [sort, setSort] = useState("name-asc");
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [items, setItems] = useState<SearchItem[]>([]);
-  const [setOptions, setSetOptions] = useState<FilterSet[]>([]);
+  const [setOptions, setSetOptions] = useState<
+    Array<{ setCode: string | null; setName: string | null }>
+  >([]);
   const [rarityOptions, setRarityOptions] = useState<string[]>([]);
+  const [setCode, setSetCode] = useState("");
+  const [rarity, setRarity] = useState("");
+  const [sort, setSort] = useState("name");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartLoaded, setCartLoaded] = useState(false);
+  const [lastAddedCardKey, setLastAddedCardKey] = useState<string | null>(null);
+  const [showBackToTop, setShowBackToTop] = useState(false);
 
   const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
   const cartTotal = cart.reduce((sum, item) => sum + lineTotal(item), 0);
-  const hasActiveFilters = setCode !== "all" || rarity !== "all" || sort !== "name-asc";
 
   const searchLabel = useMemo(() => {
     if (loading) return "Zoeken...";
@@ -122,6 +121,17 @@ export default function BuyPage() {
   }, [cart, cartLoaded]);
 
   useEffect(() => {
+    function onScroll() {
+      setShowBackToTop(window.scrollY > 700);
+    }
+
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
     const controller = new AbortController();
 
     async function load() {
@@ -130,9 +140,10 @@ export default function BuyPage() {
       try {
         const params = new URLSearchParams();
         if (q.trim().length >= 2) params.set("q", q.trim());
-        if (setCode !== "all") params.set("setCode", setCode);
-        if (rarity !== "all") params.set("rarity", rarity);
-        if (sort !== "name-asc") params.set("sort", sort);
+        if (setCode) params.set("setCode", setCode);
+        if (rarity) params.set("rarity", rarity);
+        if (sort) params.set("sort", sort);
+
         params.set("t", Date.now().toString());
 
         const res = await fetch(`/api/cards/search?${params.toString()}`, {
@@ -142,8 +153,8 @@ export default function BuyPage() {
 
         const json = (await res.json()) as SearchResponse;
         setItems(json.items ?? []);
-        setSetOptions(json.filters?.sets ?? []);
-        setRarityOptions(json.filters?.rarities ?? []);
+        setSetOptions(json.setOptions ?? []);
+        setRarityOptions(json.rarityOptions ?? []);
       } catch (error: any) {
         if (error?.name !== "AbortError") {
           console.error("Search failed", error);
@@ -161,6 +172,14 @@ export default function BuyPage() {
     };
   }, [q, setCode, rarity, sort]);
 
+  useEffect(() => {
+    if (!lastAddedCardKey) return;
+
+    const timer = window.setTimeout(() => setLastAddedCardKey(null), 1400);
+
+    return () => window.clearTimeout(timer);
+  }, [lastAddedCardKey]);
+
   function addToCart(item: SearchItem) {
     if (!item.buyPrice || item.buyPrice <= 0) return;
 
@@ -177,6 +196,8 @@ export default function BuyPage() {
 
       return [...current, { ...item, qty: 1 }];
     });
+
+    setLastAddedCardKey(item.cardKey);
   }
 
   function changeQty(cardKey: string, delta: number) {
@@ -198,13 +219,13 @@ export default function BuyPage() {
   }
 
   function resetFilters() {
-    setSetCode("all");
-    setRarity("all");
-    setSort("name-asc");
+    setSetCode("");
+    setRarity("");
+    setSort("name");
   }
 
   return (
-    <main className="min-h-screen bg-neutral-50 text-neutral-950">
+    <main className="min-h-screen bg-neutral-50 pb-28 text-neutral-950 lg:pb-0">
       <header className="border-b border-neutral-200 bg-neutral-950 text-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 sm:py-5">
           <Link href="/" className="flex items-center gap-3">
@@ -212,14 +233,14 @@ export default function BuyPage() {
               CH
             </div>
             <div>
-              <p className="text-sm text-neutral-400">Pokémon Buylist</p>
-              <strong>Card House of the East</strong>
+              <p className="text-xs text-neutral-400 sm:text-sm">Pokémon Buylist</p>
+              <strong className="text-sm sm:text-base">Card House of the East</strong>
             </div>
           </Link>
 
           <Link
             href="/bulk"
-            className="hidden rounded-full border border-white/20 px-4 py-2 text-sm text-neutral-200 hover:bg-white hover:text-neutral-950 sm:inline-flex"
+            className="rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-neutral-200 hover:bg-white hover:text-neutral-950"
           >
             Bulk buy
           </Link>
@@ -227,53 +248,54 @@ export default function BuyPage() {
       </header>
 
       <section className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
-        <div className="rounded-[2rem] border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="rounded-[1.75rem] border border-neutral-200 bg-white p-5 shadow-sm sm:rounded-[2rem] sm:p-6">
           <div className="grid gap-6 md:grid-cols-[1fr_320px] md:items-end">
             <div>
-              <p className="text-sm font-bold uppercase tracking-[0.25em] text-red-600">
-                Pokémon Buylist
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-red-600 sm:text-sm">
+                Pokémon buylist
               </p>
-              <h1 className="mt-3 text-4xl font-black tracking-tight md:text-5xl">
+              <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">
                 Verkoop je Pokémon kaarten
               </h1>
-              <p className="mt-4 max-w-2xl text-neutral-600">
-                Zoek je kaart, voeg hem toe aan je buylist en dien je lijst online in.
-                De definitieve uitbetaling wordt vastgesteld na controle.
+              <p className="mt-4 max-w-2xl text-base leading-7 text-neutral-600 sm:text-lg">
+                Zoek je kaart, voeg hem toe aan je lijst en verkoop snel aan Card
+                House of the East.
               </p>
             </div>
 
             <div className="rounded-2xl bg-neutral-50 p-4 text-sm">
               <div className="flex justify-between">
-                <span>Condition</span>
-                <strong>NM only</strong>
+                <span>Conditie</span>
+                <strong>NM</strong>
               </div>
               <div className="mt-3 flex justify-between">
-                <span>Language</span>
-                <strong>English</strong>
+                <span>Taal</span>
+                <strong>Engels</strong>
               </div>
               <div className="mt-3 flex justify-between">
                 <span>Minimum</span>
-                <strong>€1 buy price</strong>
+                <strong>€1 inkoopprijs</strong>
               </div>
             </div>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
+          <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 sm:mt-8 sm:flex sm:items-center sm:justify-between sm:gap-4">
             <div>
-              <strong>Goedkope ex/V/VMAX/VSTAR bulk?</strong>
-              <p className="mt-1 text-sm text-neutral-600">
-                Gebruik bulk buy voor kaarten die je niet los wilt opzoeken.
+              <strong className="text-neutral-950">Goedkope ex, V, VMAX of VSTAR bulk?</strong>
+              <p className="mt-1 text-sm leading-6 text-neutral-600">
+                Gebruik bulk buy voor kaarten die niet los in de zoekresultaten staan.
               </p>
             </div>
+
             <Link
               href="/bulk"
-              className="mt-4 inline-flex rounded-full bg-red-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-red-700 sm:mt-0"
+              className="mt-4 inline-flex w-full justify-center rounded-full bg-red-600 px-5 py-3 text-sm font-bold text-white hover:bg-red-700 sm:mt-0 sm:w-auto"
             >
               Naar bulk buy
             </Link>
           </div>
 
-          <div className="mt-8">
+          <div className="mt-7">
             <label className="text-sm font-semibold text-neutral-700">
               Zoek op kaartnaam, set of nummer
             </label>
@@ -281,29 +303,33 @@ export default function BuyPage() {
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Bijvoorbeeld: Charizard, Pikachu, 215, Obsidian Flames..."
-                className="w-full rounded-2xl border border-neutral-300 px-5 py-4 outline-none focus:border-red-500"
+                placeholder="Bijvoorbeeld: Charizard, Pikachu, 215..."
+                className="w-full rounded-2xl border border-neutral-300 px-5 py-4 text-base outline-none focus:border-red-500"
               />
               <button
                 type="button"
-                className="rounded-2xl bg-red-600 px-6 py-4 font-semibold text-white"
+                className="rounded-2xl bg-red-600 px-8 py-4 font-bold text-white hover:bg-red-700"
               >
-                Search
+                Zoeken
               </button>
             </div>
           </div>
 
-          <div className="mt-4">
+          <div className="mt-5">
             <button
               type="button"
-              onClick={() => setFiltersOpen((open) => !open)}
-              className="rounded-full border border-neutral-300 px-4 py-2 text-sm font-bold text-neutral-700 hover:border-red-500 hover:text-red-600 md:hidden"
+              onClick={() => setFiltersOpen((value) => !value)}
+              className="rounded-full border border-neutral-300 px-5 py-2.5 text-sm font-bold text-neutral-700 hover:border-neutral-950 md:hidden"
             >
               {filtersOpen ? "Filters verbergen" : "Filters tonen"}
-              {hasActiveFilters ? " • actief" : ""}
             </button>
 
-            <div className={["mt-4 grid gap-3 md:grid md:grid-cols-4", filtersOpen ? "grid" : "hidden"].join(" ")}>
+            <div
+              className={[
+                "mt-4 grid gap-3 md:grid md:grid-cols-[1fr_1fr_1fr_auto]",
+                filtersOpen ? "grid" : "hidden md:grid",
+              ].join(" ")}
+            >
               <label className="block">
                 <span className="text-xs font-bold uppercase tracking-wide text-neutral-500">
                   Set
@@ -313,10 +339,11 @@ export default function BuyPage() {
                   onChange={(e) => setSetCode(e.target.value)}
                   className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none focus:border-red-500"
                 >
-                  <option value="all">Alle sets</option>
+                  <option value="">Alle sets</option>
                   {setOptions.map((option) => (
-                    <option key={option.setCode} value={option.setCode}>
-                      {option.label}
+                    <option key={`${option.setCode ?? option.setName}`} value={option.setCode ?? ""}>
+                      {option.setName ?? option.setCode ?? "Onbekende set"}
+                      {option.setCode ? ` (${option.setCode})` : ""}
                     </option>
                   ))}
                 </select>
@@ -331,7 +358,7 @@ export default function BuyPage() {
                   onChange={(e) => setRarity(e.target.value)}
                   className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none focus:border-red-500"
                 >
-                  <option value="all">Alle rarities</option>
+                  <option value="">Alle rarities</option>
                   {rarityOptions.map((option) => (
                     <option key={option} value={option}>
                       {option}
@@ -349,9 +376,9 @@ export default function BuyPage() {
                   onChange={(e) => setSort(e.target.value)}
                   className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none focus:border-red-500"
                 >
-                  <option value="name-asc">Naam A-Z</option>
-                  <option value="price-desc">Hoogste prijs</option>
-                  <option value="price-asc">Laagste prijs</option>
+                  <option value="name">Naam A-Z</option>
+                  <option value="buyPriceDesc">Hoogste prijs</option>
+                  <option value="buyPriceAsc">Laagste prijs</option>
                   <option value="set">Setvolgorde</option>
                   <option value="newest">Nieuwste update</option>
                 </select>
@@ -361,10 +388,9 @@ export default function BuyPage() {
                 <button
                   type="button"
                   onClick={resetFilters}
-                  disabled={!hasActiveFilters}
-                  className="w-full rounded-xl border border-neutral-300 px-3 py-3 text-sm font-bold text-neutral-700 hover:border-red-500 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="w-full rounded-xl border border-neutral-300 px-4 py-3 text-sm font-bold text-neutral-700 hover:border-neutral-950"
                 >
-                  Reset filters
+                  Reset
                 </button>
               </div>
             </div>
@@ -374,68 +400,75 @@ export default function BuyPage() {
         <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_360px]">
           <section>
             <div className="flex items-center justify-between gap-4">
-              <h2 className="text-xl font-bold">{searchLabel}</h2>
+              <h2 className="text-2xl font-black sm:text-xl sm:font-bold">
+                {searchLabel}
+              </h2>
             </div>
 
-            <div className="mt-4 grid gap-3">
+            <div className="mt-4 grid gap-4 sm:gap-3">
               {items.map((item) => {
                 const inCartQty =
                   cart.find((cartItem) => cartItem.cardKey === item.cardKey)?.qty ?? 0;
+                const isJustAdded = lastAddedCardKey === item.cardKey;
 
                 return (
                   <article
                     key={item.cardKey}
-                    className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm"
+                    className="rounded-[1.75rem] border border-neutral-200 bg-white p-4 shadow-sm sm:rounded-2xl md:grid md:grid-cols-[auto_1fr_auto] md:gap-4"
                   >
-                    <div className="grid grid-cols-[auto_1fr] gap-4 md:grid-cols-[auto_1fr_auto] md:items-center">
+                    <div className="grid grid-cols-[auto_1fr] gap-4 md:contents">
                       <CardImage item={item} />
 
-                      <div className="min-w-0">
+                      <div className="min-w-0 md:col-start-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-xl font-black leading-tight sm:text-lg sm:font-bold">
+                          <h3 className="text-2xl font-black leading-tight sm:text-lg sm:font-bold">
                             {item.name}
                           </h3>
-                          <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700">
-                            Buying
+                          <span className="rounded-full bg-green-50 px-3 py-1 text-sm font-black text-green-700 sm:text-xs">
+                            Inkoop actief
                           </span>
                           {inCartQty > 0 && (
                             <span className="rounded-full bg-neutral-950 px-3 py-1 text-xs font-bold text-white">
-                              {inCartQty} in list
+                              {inCartQty} in lijst
+                            </span>
+                          )}
+                          {isJustAdded && (
+                            <span className="rounded-full bg-green-600 px-3 py-1 text-xs font-bold text-white">
+                              Toegevoegd
                             </span>
                           )}
                         </div>
 
-                        <p className="mt-1 text-sm leading-5 text-neutral-600 sm:leading-normal">
-                          {item.setName ?? "Unknown set"}
+                        <p className="mt-2 text-lg leading-7 text-neutral-600 sm:mt-1 sm:text-sm sm:leading-6">
+                          {item.setName ?? "Onbekende set"}
                           {item.setCode ? ` • ${item.setCode}` : ""}
                           {item.collectorNumber ? ` • #${item.collectorNumber}` : ""}
                           {item.rarity ? ` • ${item.rarity}` : ""}
                         </p>
 
-                        <p className="mt-2 text-xs text-neutral-500">
-                          {item.language} • {item.condition} • {item.finishType} • CM{" "}
-                          {item.cardmarketId}
+                        <p className="mt-2 text-sm text-neutral-500 sm:text-xs">
+                          {item.language === "English" ? "Engels" : item.language} • {item.condition} • {item.finishType} • CM {item.cardmarketId}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-[1fr_1fr] gap-3 md:mt-0 md:flex md:items-center md:justify-end md:gap-4">
+                      <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-left md:min-w-28 md:text-right">
+                        <p className="text-xs font-black uppercase tracking-wide text-neutral-500">
+                          Wij betalen
+                        </p>
+                        <p className="mt-1 text-2xl font-black text-neutral-950 md:text-xl">
+                          {euro(item.buyPrice)}
                         </p>
                       </div>
 
-                      <div className="col-span-2 mt-1 flex items-center gap-3 md:col-span-1 md:mt-0 md:justify-end">
-                        <div className="flex min-w-[9rem] flex-1 items-center justify-between rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-red-700 md:block md:min-w-28 md:flex-none md:text-right">
-                          <p className="text-[11px] font-bold uppercase tracking-wide text-red-500">
-                            We pay
-                          </p>
-                          <p className="text-2xl font-black leading-none md:text-xl">
-                            {euro(item.buyPrice)}
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => addToCart(item)}
-                          className="min-w-[7.25rem] rounded-2xl bg-red-600 px-5 py-4 text-base font-black text-white hover:bg-red-700 md:min-w-0 md:py-3 md:font-semibold"
-                        >
-                          Add
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => addToCart(item)}
+                        className="rounded-2xl bg-red-600 px-5 py-3 text-xl font-black text-white hover:bg-red-700 md:text-base md:font-semibold"
+                      >
+                        {isJustAdded ? "Toegevoegd" : "Add"}
+                      </button>
                     </div>
                   </article>
                 );
@@ -444,18 +477,19 @@ export default function BuyPage() {
 
             {!loading && items.length === 0 && (
               <div className="mt-6 rounded-2xl border border-neutral-200 bg-white p-8 text-center text-neutral-600">
-                Geen kaarten gevonden. Probeer een andere zoekterm of gebruik bulk buy voor goedkope ex/V/VMAX/VSTAR kaarten.
+                Geen kaarten gevonden. Probeer een andere zoekterm of gebruik bulk buy
+                voor goedkope ex/V/VMAX/VSTAR kaarten.
               </div>
             )}
           </section>
 
-          <aside className="lg:sticky lg:top-6 lg:self-start">
+          <aside className="hidden lg:sticky lg:top-6 lg:block lg:self-start">
             <div className="rounded-[2rem] border border-neutral-200 bg-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-black">Your buylist</h2>
+                  <h2 className="text-xl font-black">Jouw buylist</h2>
                   <p className="mt-1 text-sm text-neutral-500">
-                    {cartCount} card{cartCount === 1 ? "" : "s"} selected
+                    {cartCount} kaart{cartCount === 1 ? "" : "en"} geselecteerd
                   </p>
                 </div>
 
@@ -465,19 +499,19 @@ export default function BuyPage() {
                     onClick={clearCart}
                     className="text-sm font-semibold text-neutral-500 hover:text-red-600"
                   >
-                    Clear
+                    Wissen
                   </button>
                 )}
               </div>
 
               <div className="mt-5 rounded-2xl bg-neutral-950 p-5 text-white">
-                <p className="text-sm text-neutral-400">Estimated payout</p>
+                <p className="text-sm text-neutral-400">Geschatte uitbetaling</p>
                 <strong className="mt-1 block text-3xl">{euro(cartTotal)}</strong>
               </div>
 
               {cart.length === 0 ? (
                 <div className="mt-5 rounded-2xl bg-neutral-50 p-5 text-sm text-neutral-500">
-                  Add cards to your list to see your estimated payout.
+                  Voeg kaarten toe om je geschatte uitbetaling te zien.
                 </div>
               ) : (
                 <div className="mt-5 max-h-[420px] space-y-3 overflow-auto pr-1">
@@ -492,7 +526,7 @@ export default function BuyPage() {
                           <div className="min-w-0">
                             <strong className="block leading-snug">{item.name}</strong>
                             <span className="mt-1 block text-xs text-neutral-500">
-                              {item.setCode ?? item.setName ?? "Unknown set"}
+                              {item.setCode ?? item.setName ?? "Onbekende set"}
                               {item.collectorNumber
                                 ? ` • #${item.collectorNumber}`
                                 : ""}
@@ -555,17 +589,48 @@ export default function BuyPage() {
                     : "bg-red-600 hover:bg-red-700",
                 ].join(" ")}
               >
-                Continue with buylist
+                Doorgaan met buylist
               </Link>
 
               <p className="mt-4 text-xs leading-5 text-neutral-500">
-                Final payout is confirmed after checking version, language,
-                quantity and condition.
+                De definitieve controle gebeurt na ontvangst van de kaarten.
               </p>
             </div>
           </aside>
         </div>
       </section>
+
+      {cartCount > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-200 bg-white/95 px-4 py-3 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] backdrop-blur lg:hidden">
+          <div className="mx-auto flex max-w-6xl items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">
+                Jouw lijst
+              </p>
+              <p className="truncate text-sm font-black text-neutral-950">
+                {cartCount} kaart{cartCount === 1 ? "" : "en"} · {euro(cartTotal)}
+              </p>
+            </div>
+
+            <Link
+              href="/submit"
+              className="rounded-full bg-red-600 px-5 py-3 text-sm font-black text-white"
+            >
+              Indienen
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {showBackToTop && (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="fixed bottom-24 right-4 z-30 rounded-full border border-neutral-200 bg-white px-4 py-3 text-sm font-black text-neutral-950 shadow-lg hover:bg-neutral-50 lg:bottom-6"
+        >
+          ↑ Top
+        </button>
+      )}
     </main>
   );
 }
