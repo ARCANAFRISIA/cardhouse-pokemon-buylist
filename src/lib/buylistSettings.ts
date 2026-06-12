@@ -1,5 +1,12 @@
 import { prisma } from "@/lib/prisma";
 
+export type PayoutTier = {
+  label: string;
+  minCents: number;
+  maxCents: number | null;
+  payoutPct: number;
+};
+
 export type BuylistSettings = {
   generalPayoutPct: number;
   excellentPenaltyPct: number;
@@ -7,6 +14,7 @@ export type BuylistSettings = {
   customerCanShipDirectly: boolean;
   shippingInstructions: string;
   termsText: string;
+  payoutTiers: PayoutTier[];
 };
 
 export const DEFAULT_BUYLIST_SETTINGS: BuylistSettings = {
@@ -14,10 +22,10 @@ export const DEFAULT_BUYLIST_SETTINGS: BuylistSettings = {
   excellentPenaltyPct: 30,
   minimumBuyPriceCents: 100,
   customerCanShipDirectly: true,
+  payoutTiers: [],
   shippingInstructions:
     "Buylists onder €400 verzend je zelf, op eigen kosten en risico. Vanaf €400 kan Card House of the East kosteloos een verzendlabel aanbieden. Leg de kaarten op dezelfde volgorde als je buylist en voeg een briefje toe met je naam, e-mailadres en referentie.",
-  termsText:
-    `Deze buylist is een voorlopige prijsopgave voor Pokémon kaarten. De definitieve beoordeling en uitbetaling worden vastgesteld nadat Card House of the East de kaarten fysiek heeft ontvangen en gecontroleerd.
+  termsText: `Deze buylist is een voorlopige prijsopgave voor Pokémon kaarten. De definitieve beoordeling en uitbetaling worden vastgesteld nadat Card House of the East de kaarten fysiek heeft ontvangen en gecontroleerd.
 
 Geaccepteerde talen
 
@@ -92,6 +100,70 @@ function toBool(value: string | null | undefined, fallback: boolean) {
   return fallback;
 }
 
+function normalizePayoutTiers(value: unknown): PayoutTier[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((tier, index) => {
+      const raw = tier as Partial<PayoutTier>;
+
+      const minCents = Number(raw.minCents);
+      const maxCents =
+        raw.maxCents == null || raw.maxCents === undefined
+          ? null
+          : Number(raw.maxCents);
+      const payoutPct = Number(raw.payoutPct);
+
+      if (!Number.isInteger(minCents) || minCents < 0) return null;
+      if (maxCents !== null && (!Number.isInteger(maxCents) || maxCents <= minCents)) {
+        return null;
+      }
+      if (!Number.isInteger(payoutPct) || payoutPct < 1 || payoutPct > 95) {
+        return null;
+      }
+
+      return {
+        label:
+          typeof raw.label === "string" && raw.label.trim()
+            ? raw.label.trim()
+            : `Tier ${index + 1}`,
+        minCents,
+        maxCents,
+        payoutPct,
+      };
+    })
+    .filter((tier): tier is PayoutTier => tier !== null)
+    .sort((a, b) => a.minCents - b.minCents);
+}
+
+function parsePayoutTiers(value: string | null | undefined): PayoutTier[] {
+  if (!value) return DEFAULT_BUYLIST_SETTINGS.payoutTiers;
+
+  try {
+    return normalizePayoutTiers(JSON.parse(value));
+  } catch {
+    return DEFAULT_BUYLIST_SETTINGS.payoutTiers;
+  }
+}
+
+export function getPayoutPctForMarketPriceCents(
+  marketPriceCents: number,
+  settings: Pick<BuylistSettings, "generalPayoutPct" | "payoutTiers">
+) {
+  const tiers = settings.payoutTiers ?? [];
+
+  for (const tier of tiers) {
+    const inMin = marketPriceCents >= tier.minCents;
+    const inMax = tier.maxCents == null || marketPriceCents < tier.maxCents;
+
+    if (inMin && inMax) {
+      return tier.payoutPct;
+    }
+  }
+
+  return settings.generalPayoutPct;
+}
+
 export async function getBuylistSettings(): Promise<BuylistSettings> {
   const rows = await prisma.buylistSetting.findMany();
 
@@ -118,10 +190,13 @@ export async function getBuylistSettings(): Promise<BuylistSettings> {
       map.get("shippingInstructions") ??
       DEFAULT_BUYLIST_SETTINGS.shippingInstructions,
     termsText: map.get("termsText") ?? DEFAULT_BUYLIST_SETTINGS.termsText,
+    payoutTiers: parsePayoutTiers(map.get("payoutTiersJson")),
   };
 }
 
 export async function saveBuylistSettings(input: BuylistSettings) {
+  const payoutTiers = normalizePayoutTiers(input.payoutTiers);
+
   const entries: Array<[string, string]> = [
     ["generalPayoutPct", String(input.generalPayoutPct)],
     ["excellentPenaltyPct", String(input.excellentPenaltyPct)],
@@ -129,6 +204,7 @@ export async function saveBuylistSettings(input: BuylistSettings) {
     ["customerCanShipDirectly", String(input.customerCanShipDirectly)],
     ["shippingInstructions", input.shippingInstructions],
     ["termsText", input.termsText],
+    ["payoutTiersJson", JSON.stringify(payoutTiers)],
   ];
 
   await prisma.$transaction(

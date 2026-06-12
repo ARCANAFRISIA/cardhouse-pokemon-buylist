@@ -2,12 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import {
+  DEFAULT_BUYLIST_SETTINGS,
   getBuylistSettings,
   saveBuylistSettings,
 } from "@/lib/buylistSettings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const PayoutTierSchema = z
+  .object({
+    label: z.string().trim().max(80).optional().or(z.literal("")),
+    minCents: z.number().int().min(0).max(100_000_000),
+    maxCents: z.number().int().min(0).max(100_000_000).nullable().optional(),
+    payoutPct: z.number().int().min(1).max(95),
+  })
+  .refine(
+    (tier) => tier.maxCents == null || tier.maxCents > tier.minCents,
+    {
+      message: "maxCents must be greater than minCents",
+      path: ["maxCents"],
+    }
+  );
 
 const SettingsSchema = z.object({
   generalPayoutPct: z.number().int().min(1).max(95),
@@ -16,6 +32,11 @@ const SettingsSchema = z.object({
   customerCanShipDirectly: z.boolean(),
   shippingInstructions: z.string().trim().min(10).max(5000),
   termsText: z.string().trim().min(10).max(10000),
+  payoutTiers: z
+    .array(PayoutTierSchema)
+    .max(30)
+    .optional()
+    .default(DEFAULT_BUYLIST_SETTINGS.payoutTiers),
 });
 
 export async function GET() {

@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { parseCsv, type CsvRow } from "@/lib/csv";
-import { getBuylistSettings } from "@/lib/buylistSettings";
-
-
+import {
+  getBuylistSettings,
+  getPayoutPctForMarketPriceCents,
+  type BuylistSettings,
+} from "@/lib/buylistSettings";
 
 function normalizeText(value: unknown) {
   return String(value ?? "").trim();
@@ -29,14 +31,10 @@ function parseEuroToCents(value: unknown): number | null {
   const hasDot = raw.includes(".");
 
   if (hasComma && hasDot) {
-    // Europese notatie: 1.234,56
     raw = raw.replace(/\./g, "").replace(",", ".");
   } else if (hasComma) {
-    // Europese decimalen: 1,95
     raw = raw.replace(",", ".");
   } else if (hasDot) {
-    // PowerTools gebruikt punt als decimaal: 1.95
-    // Dus punt laten staan.
     raw = raw;
   }
 
@@ -72,20 +70,60 @@ function makeCardKey(input: {
   ].join("|");
 }
 
-function mapPowertoolsRow(row: CsvRow, payoutPct: number) {
+function normalizeLanguage(value: string) {
+  const raw = value.trim();
+  const lower = raw.toLowerCase();
+
+  if (lower === "en" || lower === "eng" || lower === "english") {
+    return "English";
+  }
+
+  if (
+    lower === "jp" ||
+    lower === "jpn" ||
+    lower === "ja" ||
+    lower === "japanese" ||
+    lower === "japans"
+  ) {
+    return "Japanese";
+  }
+
+  return raw;
+}
+
+function normalizeCondition(value: string) {
+  const upper = value.toUpperCase();
+
+  if (upper.includes("NEAR")) return "NM";
+  if (upper === "MINT") return "NM";
+
+  return upper;
+}
+
+function mapPowertoolsRow(row: CsvRow, settings: BuylistSettings) {
   const cardmarketId = parseIntLoose(
     getValue(row, ["cardmarketId", "idProduct", "productId", "id"])
   );
 
   const name = normalizeText(getValue(row, ["name", "Name"]));
-  const setName = normalizeText(getValue(row, ["set", "setName", "expansion", "Expansion"]));
-  const setCode = normalizeText(getValue(row, ["setCode", "Set code", "set_code"]));
-  const collectorNumber = normalizeText(getValue(row, ["cn", "collectorNumber", "number"]));
+  const setName = normalizeText(
+    getValue(row, ["set", "setName", "expansion", "Expansion"])
+  );
+  const setCode = normalizeText(
+    getValue(row, ["setCode", "Set code", "set_code"])
+  );
+  const collectorNumber = normalizeText(
+    getValue(row, ["cn", "collectorNumber", "number"])
+  );
   const rarity = normalizeText(getValue(row, ["rarity", "Rarity"]));
 
-  const conditionRaw = normalizeText(getValue(row, ["condition", "Condition"])) || "NM";
-  const languageRaw = normalizeText(getValue(row, ["language", "Language"])) || "English";
-  const finishRaw = normalizeText(getValue(row, ["finishType", "finish", "printing"])) || "Regular";
+  const conditionRaw =
+    normalizeText(getValue(row, ["condition", "Condition"])) || "NM";
+  const languageRaw =
+    normalizeText(getValue(row, ["language", "Language"])) || "English";
+  const finishRaw =
+    normalizeText(getValue(row, ["finishType", "finish", "printing"])) ||
+    "Regular";
 
   const priceCents = parseEuroToCents(getValue(row, ["price", "Price"]));
 
@@ -93,15 +131,8 @@ function mapPowertoolsRow(row: CsvRow, payoutPct: number) {
     return null;
   }
 
-  const condition = conditionRaw.toUpperCase().includes("NEAR")
-    ? "NM"
-    : conditionRaw.toUpperCase();
-
-  const language =
-    languageRaw.toLowerCase() === "en" || languageRaw.toLowerCase() === "english"
-      ? "English"
-      : languageRaw;
-
+  const condition = normalizeCondition(conditionRaw);
+  const language = normalizeLanguage(languageRaw);
   const finishType = finishRaw || "Regular";
 
   const cardKey = makeCardKey({
@@ -111,6 +142,7 @@ function mapPowertoolsRow(row: CsvRow, payoutPct: number) {
     finishType,
   });
 
+  const payoutPct = getPayoutPctForMarketPriceCents(priceCents, settings);
   const buyPriceCents = floorBuyPrice(priceCents, payoutPct);
 
   return {
@@ -126,6 +158,7 @@ function mapPowertoolsRow(row: CsvRow, payoutPct: number) {
     finishType,
     marketPriceCents: priceCents,
     buyPriceCents,
+    payoutPct,
   };
 }
 
@@ -133,12 +166,11 @@ export async function importPowertoolsCsv(input: {
   text: string;
   filename?: string;
 }) {
-const rows = parseCsv(input.text);
-const settings = await getBuylistSettings();
-const payoutPct = settings.generalPayoutPct;
+  const rows = parseCsv(input.text);
+  const settings = await getBuylistSettings();
 
-let imported = 0;
-let skipped = 0;
+  let imported = 0;
+  let skipped = 0;
 
   const batch = await prisma.importBatch.create({
     data: {
@@ -152,15 +184,19 @@ let skipped = 0;
 
   try {
     for (const row of rows) {
-      const mapped = mapPowertoolsRow(row, payoutPct);
+      const mapped = mapPowertoolsRow(row, settings);
 
       if (!mapped) {
         skipped++;
         continue;
       }
 
-      // MVP-filter: alleen English + NM importeren.
-      if (mapped.language !== "English" || mapped.condition !== "NM") {
+      // Pokémon MVP: alleen NM importeren.
+      // English en Japanese mogen allebei, zolang ze als eigen Cardmarket SKU binnenkomen.
+      if (
+        !["English", "Japanese"].includes(mapped.language) ||
+        mapped.condition !== "NM"
+      ) {
         skipped++;
         continue;
       }
@@ -211,7 +247,7 @@ let skipped = 0;
           source: "POWERTOOLS",
           marketPriceCents: mapped.marketPriceCents,
           buyPriceCents: mapped.buyPriceCents,
-          payoutPct,
+          payoutPct: mapped.payoutPct,
           isCurrent: true,
         },
       });
