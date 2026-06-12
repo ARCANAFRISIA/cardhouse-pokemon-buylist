@@ -3,8 +3,17 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 
+import { getBuylistSettings } from "@/lib/buylistSettings";
+import { sendMail } from "@/lib/mail";
+import {
+  adminNewSubmissionEmail,
+  customerSubmissionConfirmationEmail,
+} from "@/lib/submissionEmails";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+
 
 const SubmitSchema = z.object({
   customer: z.object({
@@ -191,6 +200,36 @@ export async function POST(req: NextRequest) {
         items: true,
       },
     });
+
+        const settings = await getBuylistSettings();
+
+    try {
+      if (submission.email) {
+        const mail = customerSubmissionConfirmationEmail(submission, settings);
+
+        await sendMail({
+          to: submission.email,
+          subject: mail.subject,
+          html: mail.html,
+          replyTo: process.env.MAIL_REPLY_TO ?? process.env.MAIL_ADMIN,
+        });
+      }
+    } catch (mailError) {
+      console.warn("[submit buylist] customer mail failed:", mailError);
+    }
+
+    try {
+      const mail = adminNewSubmissionEmail(submission);
+
+      await sendMail({
+        to: process.env.MAIL_ADMIN,
+        subject: mail.subject,
+        html: mail.html,
+        replyTo: submission.email ?? undefined,
+      });
+    } catch (mailError) {
+      console.warn("[submit buylist] admin mail failed:", mailError);
+    }
 
     return NextResponse.json({
       ok: true,

@@ -3,6 +3,9 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 
+import { sendMail } from "@/lib/mail";
+import { customerStatusEmail } from "@/lib/submissionEmails";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -101,13 +104,30 @@ export async function PATCH(
             : undefined,
         metaText: JSON.stringify(events),
       },
-      select: {
-        id: true,
-        status: true,
-        metaText: true,
+      include: {
+        items: true,
       },
     });
 
+    try {
+      if (
+        updated.email &&
+        ["RECEIVED", "CHECKING", "ADJUSTED", "APPROVED", "PAID", "REJECTED"].includes(
+          updated.status
+        )
+      ) {
+        const mail = customerStatusEmail(updated, updated.status, message);
+
+        await sendMail({
+          to: updated.email,
+          subject: mail.subject,
+          html: mail.html,
+          replyTo: process.env.MAIL_REPLY_TO ?? process.env.MAIL_ADMIN,
+        });
+      }
+    } catch (mailError) {
+      console.warn("[admin status update] customer mail failed:", mailError);
+    }
     return NextResponse.json({
       ok: true,
       submission: updated,

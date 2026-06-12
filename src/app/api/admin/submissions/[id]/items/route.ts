@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { sendMail } from "@/lib/mail";
+import { customerAdjustedItemsEmail } from "@/lib/submissionEmails";
+
 import { getBuylistSettings } from "@/lib/buylistSettings";
 import { prisma } from "@/lib/prisma";
 
@@ -188,6 +191,34 @@ export async function PATCH(
         },
       });
     });
+
+        if (changes && changes.length > 0) {
+      try {
+        const updatedSubmission = await prisma.submission.findUnique({
+          where: { id },
+          include: {
+            items: true,
+          },
+        });
+
+        if (updatedSubmission?.email) {
+          const mail = customerAdjustedItemsEmail(
+            updatedSubmission,
+            changes,
+            cleanNote(parsed.data.message)
+          );
+
+          await sendMail({
+            to: updatedSubmission.email,
+            subject: mail.subject,
+            html: mail.html,
+            replyTo: process.env.MAIL_REPLY_TO ?? process.env.MAIL_ADMIN,
+          });
+        }
+      } catch (mailError) {
+        console.warn("[admin item update] adjustment mail failed:", mailError);
+      }
+    }
 
     return NextResponse.json({
       ok: true,
