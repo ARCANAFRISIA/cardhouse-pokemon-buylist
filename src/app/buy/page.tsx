@@ -98,7 +98,7 @@ export default function BuyPage() {
   const [rarities, setRarities] = useState<string[]>([]);
   const [setCode, setSetCode] = useState("all");
   const [rarity, setRarity] = useState("all");
-  const [sort, setSort] = useState("name");
+  const [sort, setSort] = useState("newest_price");
   const [showFilters, setShowFilters] = useState(false);
   const [loading, setLoading] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -234,14 +234,15 @@ export default function BuyPage() {
   function resetFilters() {
     setSetCode("all");
     setRarity("all");
-    setSort("name");
+    setSort("newest_price");
   }
 
   function scrollToTop() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  const hasActiveFilters = setCode !== "all" || rarity !== "all" || sort !== "name";
+  const hasActiveFilters =
+  setCode !== "all" || rarity !== "all" || sort !== "newest_price";
 
   return (
     <main className="min-h-screen bg-neutral-50 pb-28 text-neutral-950 lg:pb-0">
@@ -395,11 +396,12 @@ export default function BuyPage() {
                   onChange={(e) => setSort(e.target.value)}
                   className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 outline-none focus:border-red-500"
                 >
-                  <option value="name">Naam A-Z</option>
-                  <option value="price_desc">Hoogste prijs</option>
-                  <option value="price_asc">Laagste prijs</option>
-                  <option value="set">Setvolgorde</option>
-                  <option value="updated">Nieuwste update</option>
+<option value="newest_price">Nieuwste set · hoogste prijs</option>
+<option value="price_desc">Hoogste prijs</option>
+<option value="price_asc">Laagste prijs</option>
+<option value="name">Naam A-Z</option>
+<option value="set">Setvolgorde</option>
+<option value="updated">Nieuwste update</option>
                 </select>
               </label>
 
